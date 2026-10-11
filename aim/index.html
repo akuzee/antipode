@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Point Through the Earth — Arm Aim Calculator</title>
+<title>Point Through the Earth: Arm Aim Calculator</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
@@ -57,9 +57,9 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Point Through the Earth — batch + map</h1>
+  <h1>Point Through the Earth: batch + map</h1>
   <p class="sub">Facing north at your location, this lists which way to face and how far to tip your arm
-  down to point — through the planet — at each city, and plots them on a map flipped east–west, the way
+  down to point, through the planet, at each city, and plots them on a map flipped east–west, the way
   the far side actually looks when you stare down through the Earth.</p>
 
   <div class="barrow">
@@ -71,7 +71,7 @@
   <div class="obs" id="obsResolved"></div>
 
   <div class="block">
-    <label>Target cities — one per line</label>
+    <label>Target cities (one per line)</label>
     <textarea id="targets" placeholder="Perth&#10;Sydney&#10;Antananarivo&#10;McMurdo Station">Perth
 Adelaide
 Melbourne
@@ -236,7 +236,7 @@ async function renderMaps(){
   groups.forEach((g,gi)=> g.forEach(d=> d._color = PALETTE[gi%PALETTE.length]));
 
   // 1) whole-world mirrored map
-  maps.insertAdjacentHTML('beforeend','<div class="maptitle">Through-the-Earth view (mirrored) — ◎ = straight down (your antipode)</div>');
+  maps.insertAdjacentHTML('beforeend','<div class="maptitle">Through-the-Earth view (mirrored). ◎ = straight down (your antipode)</div>');
   const W=Math.min(maps.clientWidth||680, 680), H=Math.round(W/2);
   const world=document.createElement('canvas'); world.width=W; world.height=H; maps.appendChild(world);
   const wc=world.getContext('2d');
@@ -244,7 +244,7 @@ async function renderMaps(){
   drawLand(wc, geo, wproj);
   drawMarker(wc, wproj, antipode.lat, antipode.lon);
   dots.forEach(d=>drawDot(wc, wproj, d, d._color, d.name.split(',')[0]));
-  maps.insertAdjacentHTML('beforeend','<div class="flipnote">East is on the left — text/shapes look reversed because you’re seeing the far side from the inside.</div>');
+  maps.insertAdjacentHTML('beforeend','<div class="flipnote">East is on the left; text/shapes look reversed because you’re seeing the far side from the inside.</div>');
 
   // 2) per-cluster zoom panels
   if(groups.length){
@@ -280,7 +280,7 @@ async function run(){
   try{ obs=await resolve($('observer').value); }
   catch(e){ $('status').textContent=`Couldn't find observer "${$('observer').value}"`; return; }
   antipode={ lat:-obs.lat, lon:(((obs.lon+180)+540)%360)-180 };  // wrap to [-180,180]
-  $('obsResolved').innerHTML=`Observer: <span>${obs.name}</span> (${obs.lat.toFixed(2)}, ${obs.lon.toFixed(2)}) — antipode at ${antipode.lat.toFixed(2)}, ${antipode.lon.toFixed(2)}`;
+  $('obsResolved').innerHTML=`Observer: <span>${obs.name}</span> (${obs.lat.toFixed(2)}, ${obs.lon.toFixed(2)}); antipode at ${antipode.lat.toFixed(2)}, ${antipode.lon.toFixed(2)}`;
 
   const queries=$('targets').value.split('\n').map(s=>s.trim()).filter(Boolean);
   results=await Promise.all(queries.map(async q=>{

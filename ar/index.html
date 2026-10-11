@@ -75,11 +75,11 @@
 <canvas id="cv"></canvas>
 
 <div id="chips">
-  <div class="chip" id="chipLoc">location: —</div>
-  <div class="chip" id="chipHead">heading: —</div>
+  <div class="chip" id="chipLoc">location: –</div>
+  <div class="chip" id="chipHead">heading: –</div>
   <div class="chip hidden" id="chipFroze">FROZEN</div>
 </div>
-<div id="readout"><div id="roMain">—</div><div class="sub" id="roSub"></div></div>
+<div id="readout"><div id="roMain">–</div><div class="sub" id="roSub"></div></div>
 <div id="note"></div>
 
 <div id="btns">
@@ -88,7 +88,7 @@
 </div>
 
 <div id="panel" class="hidden">
-  <h3>Antipode — controls</h3>
+  <h3>Antipode: controls</h3>
   <div class="row"><label>Field of view</label>
     <input type="range" id="fov" min="40" max="130" step="1" value="60"><span class="val" id="fovVal">60&#176;</span></div>
   <div class="row"><label>Camera opacity</label>
@@ -105,8 +105,8 @@
     <input type="number" id="lon" step="any" placeholder="lon" inputmode="decimal">
     <button id="locApply">set</button><button id="locGps">GPS</button></div>
   <div class="row"><label>Camera</label><select id="camSel"><option>default</option></select></div>
-  <div class="note-sm" id="apInfo">antipode: —</div>
-  <div class="note-sm">Tip: switching to the ultra-wide (0.5&#215;) lens roughly doubles the visible &#920; —
+  <div class="note-sm" id="apInfo">antipode: –</div>
+  <div class="note-sm">Tip: switching to the ultra-wide (0.5&#215;) lens roughly doubles the visible &#920;,
     from ~84&#176; to ~119&#176; at the frame corners (45% &#8594; 74% of the Earth's surface). Pick it under
     Camera, then raise the FOV slider to match (~100&#8211;120&#176;).</div>
   <div class="note-sm">The FOV slider is the scale calibration: if the overlay feels too zoomed-in,
@@ -119,7 +119,7 @@
   <p>See straight through the planet. Point your phone at the ground and the far side of the
      Earth is drawn on the camera image, as if the planet were transparent.</p>
   <p>Straight down is your exact antipode. Tilting toward the horizon reveals coastlines closer
-     to home — the horizon itself is your own position, in every direction at once.</p>
+     to home; the horizon itself is your own position, in every direction at once.</p>
   <button id="startBtn">Start</button>
   <p style="font-size:11px;color:#5f7a92;margin-top:18px">Needs motion &amp; orientation, location and
      camera permission. Everything runs on the phone; nothing is sent anywhere.<br>
@@ -129,7 +129,7 @@
 <div id="testPanel" class="hidden"><pre id="testOut"></pre><button id="testClose">close</button></div>
 
 <script id="core">
-/* Antipode core: pure math + data. No DOM access — this block is also executed
+/* Antipode core: pure math + data. No DOM access - this block is also executed
    under Node by test/core-test.mjs. */
 var Antipode = (function () {
   'use strict';
@@ -481,7 +481,7 @@ var S = {
 var coastDeg = A.densify(A.decodeCoast(A.COAST_DATA), 0.25);
 
 /* Rings of constant Theta (distance from antipode) are cones of nadir angle
-   nu = Theta/2 — location-independent, so precompute their direction fields. */
+   nu = Theta/2 - location-independent, so precompute their direction fields. */
 function ringDirs(nuDeg) {
   var nu = nuDeg * D2R, s = Math.sin(nu), c = Math.cos(nu);
   var n = 181, a = new Float32Array(n * 3);
@@ -555,7 +555,7 @@ function onOrient(ev, absSource) {
 /* --------------------------------------------------------------- camera --- */
 function startCamera(deviceId) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    note('no camera API — black background'); return;
+    note('no camera API; black background'); return;
   }
   if (S.stream) S.stream.getTracks().forEach(function (t) { t.stop(); });
   var cons = deviceId
@@ -581,7 +581,7 @@ function startCamera(deviceId) {
       sel.appendChild(o);
     });
   }).catch(function () {
-    note('camera unavailable — running on black background');
+    note('camera unavailable; running on black background');
   });
 }
 
@@ -668,7 +668,7 @@ function render(t) {
   ctx.beginPath();
   var ha = projectLine(HORIZON, m, F, cx, cy, true);
   ctx.stroke();
-  if (ha) haloText('horizon — your own position, every direction', ha.x + 5, ha.y - 9, 'rgba(255,190,110,0.9)');
+  if (ha) haloText('horizon: your own position, every direction', ha.x + 5, ha.y - 9, 'rgba(255,190,110,0.9)');
 
   // coastlines
   if (S.dirs) {
@@ -728,8 +728,8 @@ function updateHud(m) {
   var nu = Math.acos(clamp(m[8], -1, 1)) * R2D;
   var ro = $('roMain'), rs = $('roSub');
   if (nu > 90.5) {
-    ro.textContent = 'ν ' + nu.toFixed(1) + '° — above the horizon';
-    rs.textContent = 'the far side of the Earth is below you — aim down';
+    ro.textContent = 'ν ' + nu.toFixed(1) + '°, above the horizon';
+    rs.textContent = 'the far side of the Earth is below you; aim down';
   } else {
     var th = 2 * nu;
     ro.textContent = 'ν ' + nu.toFixed(1) + '° · Θ ' + th.toFixed(1) + '° from antipode';
@@ -755,10 +755,10 @@ function updateHud(m) {
   else if (S.mode === 'absolute')
     hc.textContent = 'heading: absolute' + (S.trim ? ' · trim ' + S.trim + '°' : '');
   else if (S.mode === 'relative')
-    hc.textContent = 'heading: RELATIVE — align with trim slider';
+    hc.textContent = 'heading: RELATIVE, align with trim slider';
   else if (S.mode === 'manual')
-    hc.textContent = 'manual — drag to look, scroll = FOV';
-  else hc.textContent = 'heading: —';
+    hc.textContent = 'manual: drag to look, scroll = FOV';
+  else hc.textContent = 'heading: –';
 }
 
 /* ------------------------------------------------------------ main loop --- */
@@ -772,7 +772,7 @@ function frame(t) {
   if (S.man.on) S.qT = A.qFromEuler(S.man.yaw * D2R, S.man.pitch * D2R, 0);
   if (!S.frozen && S.qT) {
     /* exponential smoothing, tau ~ 0.15 s: kills compass shiver without
-       adding perceptible lag — this is what makes the overlay feel locked */
+       adding perceptible lag - this is what makes the overlay feel locked */
     S.qS = S.qS ? A.qSlerp(S.qS, S.qT, 1 - Math.exp(-dt / 0.15)) : S.qT.slice();
   }
   render(t);
@@ -830,7 +830,7 @@ $('runTest').addEventListener('click', function () {
     var line = document.createElement('span');
     line.className = r.pass ? 'ok' : 'bad';
     line.textContent = (r.pass ? '✓ ' : '✗ ') + r.name +
-      (r.detail ? '  — ' + r.detail : '') + '\n';
+      (r.detail ? '  - ' + r.detail : '') + '\n';
     out.appendChild(line);
   });
   var sum = document.createElement('span');
@@ -842,11 +842,11 @@ $('runTest').addEventListener('click', function () {
 $('testClose').addEventListener('click', function () { $('testPanel').classList.add('hidden'); });
 
 function requestGeo() {
-  if (!navigator.geolocation) { note('no geolocation — set location manually'); return; }
+  if (!navigator.geolocation) { note('no geolocation; set location manually'); return; }
   navigator.geolocation.getCurrentPosition(
     function (p) { setLocation(p.coords.latitude, p.coords.longitude, 'GPS'); },
     function () {
-      note('location unavailable — set it manually in ⚙');
+      note('location unavailable; set it manually in ⚙');
       $('panel').classList.remove('hidden');
     },
     { timeout: 12000, maximumAge: 600000 });
@@ -885,9 +885,9 @@ $('startBtn').addEventListener('click', function () {
   if (window.DeviceOrientationEvent &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission().then(function (st) {
-      if (st !== 'granted') note('motion denied — drag to look around');
+      if (st !== 'granted') note('motion denied; drag to look around');
       attach();
-    }).catch(function () { note('motion permission error — drag to look'); attach(); });
+    }).catch(function () { note('motion permission error; drag to look'); attach(); });
   } else {
     attach();
   }

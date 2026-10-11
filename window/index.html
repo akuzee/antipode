@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Earth Window — Head-Tracked NYC Antipode View</title>
+    <title>Earth Window: Head-Tracked NYC Antipode View</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -40,7 +40,7 @@
         
         /* Plumb marker: predicted screen point directly beneath the eye.
            The rendered white antipode dot must sit inside this ring at all
-           times (live calibration invariant) — position driven by JS. */
+           times (live calibration invariant) - position driven by JS. */
         #crosshair {
             position: absolute;
             top: 50%;
@@ -182,7 +182,7 @@
         //   is rigid to the screen, so eye positions it reports are already
         //   in this frame under any tilt.
         CONFIG.WINDOW = {
-            screenWidth: 0.3024,   // physical active-glass width (m) — measure yours (14" MBP ≈ 0.3024)
+            screenWidth: 0.3024,   // physical active-glass width (m) - measure yours (14" MBP ≈ 0.3024)
             screenHeight: 0.1964,  // physical active-glass height (m) (14" MBP ≈ 0.1964)
             camOffsetX: 0.0,       // webcam offset from the screen centerline (m, + = screen-right)
             bezelGap: 0.006,       // glass top edge -> webcam lens (m)
@@ -387,7 +387,7 @@
         );
         function savePose() { try { localStorage.setItem(POSE_KEY, JSON.stringify(pose)); } catch (e) {} }
 
-        // Depth lock ('Z'): freeze ez at its current value — lateral-only
+        // Depth lock ('Z'): freeze ez at its current value - lateral-only
         // tracking. Diagnostic for depth-estimate noise, and a valid
         // preference if MediaPipe's ez feels swimmy on your camera.
         let ezLocked = false, ezLockValue = CONFIG.WINDOW.defaultEye.z;
@@ -406,7 +406,7 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(CONFIG.backgroundColor);
             
-            // Camera object — its pose and projection are fully managed by
+            // Camera object - its pose and projection are fully managed by
             // setupWindowCamera()/applyWindowProjection() (off-axis window
             // model). The constructor args here are immediately superseded.
             camera = new THREE.PerspectiveCamera(
@@ -582,7 +582,7 @@
 
             // Debug-overlay groups: rings toggle with 'R'; the white antipode
             // dot toggles with the plumb marker 'P' (they form the live
-            // calibration pair — predicted vs rendered antipode position).
+            // calibration pair - predicted vs rendered antipode position).
             ringsGroup = new THREE.Group();
             antipodeDotGroup = new THREE.Group();
             scene.add(ringsGroup);
@@ -854,14 +854,14 @@
         //
         // The camera POSITION stays pinned to the observer surface point P:
         // at globe scale (1 unit = 254.84 m) the real eye sits ~1.6e-3 units
-        // above the glass — below one fp32 ulp at coordinate 25000, i.e. not
+        // above the glass - below one fp32 ulp at coordinate 25000, i.e. not
         // even representable as a distinct GPU vertex-space position. All of
         // the eye geometry is therefore carried by the asymmetric frustum
         // tangents (dimensionless, O(1)), which is exact in angle and
         // numerically ideal. Proven at startup by runProjectionSelfTests().
 
         // Frustum tangents: eye -> each window edge, in units of ez.
-        // These depend on BOTH distance ez AND lateral offset (ex,ey) —
+        // These depend on BOTH distance ez AND lateral offset (ex,ey) –
         // that coupling IS the head-coupled window effect.
         function computeFrustumTangents(e, rect) {
             const ex = e.x - rect.cx, ey = e.y - rect.cy;
@@ -919,12 +919,12 @@
         // The virtual Earth is anchored to REAL gravity/north: room axes map
         // to (east, north, up) at the observer point. The screen is a pane
         // whose orientation in the room is `pose` (heading, then pitch, then
-        // roll — intrinsic). Tilting the pane re-aims it through the fixed
+        // roll - intrinsic). Tilting the pane re-aims it through the fixed
         // underground panorama; the antipode stays gravity-down regardless.
         //
         // Because the eye is measured in the SCREEN frame (webcam rigid to
         // the glass) and the window stays the z=0 rectangle of that frame,
-        // the off-axis frustum is UNCHANGED by pose — only the camera's
+        // the off-axis frustum is UNCHANGED by pose - only the camera's
         // orientation in the virtual world rotates. (The pane's positional
         // offset when propped up is centimeters = sub-fp32-ulp at globe
         // scale, so the camera stays at P; same argument as the eye height.)
@@ -948,7 +948,7 @@
         }
 
         // Where the gravity ray from eye e pierces the glass (screen coords,
-        // meters) — the predicted on-screen position of the antipode. Null if
+        // meters) - the predicted on-screen position of the antipode. Null if
         // the pane is tilted near/past vertical so straight-down misses it.
         function antipodePlumbScreenPoint(e) {
             const d = downInScreenFrame();
@@ -972,7 +972,7 @@
             camera.position.copy(observerPos);
             updateCameraOrientation();
             // The stock PerspectiveCamera method would clobber the off-axis
-            // matrix with a symmetric one — route any caller back to ours.
+            // matrix with a symmetric one - route any caller back to ours.
             camera.updateProjectionMatrix = function () {
                 applyWindowProjection(camera, currentEye);
             };
@@ -992,7 +992,7 @@
         // i.e. R = diag(-1,+1,-1) (proper rotation, 180° about y), then add
         // the webcam's glass position (camOffsetX, h/2 + bezelGap, 0).
         // flipX/flipY (X/Y keys) rescue a disagreeing setup; centerX/Y ('C')
-        // re-zero (ex,ey) — this also absorbs the canonical-face-origin-vs-
+        // re-zero (ex,ey) - this also absorbs the canonical-face-origin-vs-
         // eye-midpoint offset; depthScale ('D') fixes the systematic scale
         // from MediaPipe's hardcoded 63° virtual camera.
         function cameraToScreenFrame(tCm) {
@@ -1017,7 +1017,7 @@
         }
 
         // ============================================
-        // ONE-EURO FILTER (Casiez et al., CHI 2012) — meter/second units
+        // ONE-EURO FILTER (Casiez et al., CHI 2012) - meter/second units
         // ============================================
         class OneEuroFilter {
             constructor(minCutoff, beta, dCutoff) {
@@ -1106,7 +1106,7 @@
         // INPUT: debug toggles, calibration, keyboard-eye override
         // ============================================
         // 'T' toggles keyboard-eye mode: a simulated eye you steer with
-        // arrows/WASD (+/-/wheel for distance) — works with no webcam and
+        // arrows/WASD (+/-/wheel for distance) - works with no webcam and
         // gives deterministic screenshots for testing the projection.
         function onKeyDown(ev) {
             if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
@@ -1163,7 +1163,7 @@
                     case 'y': calib.flipY = !calib.flipY; saveCalib(); return;
                     case 'c':
                         // Hover your head over the SCREEN CENTER, press C.
-                        // (Run 'D' depth calibration first — C depends on scale.)
+                        // (Run 'D' depth calibration first - C depends on scale.)
                         if (lastGood) {
                             calib.centerX -= lastGood.x;
                             calib.centerY -= lastGood.y;
@@ -1225,7 +1225,7 @@
                 fpsFrames = 0; fpsLast = nowMs;
             }
 
-            // Plumb marker: predicted screen position of the antipode — where
+            // Plumb marker: predicted screen position of the antipode - where
             // the gravity ray from the eye pierces the glass (self-test T1).
             // Flat pane: directly beneath the eye. Tilted pane: slides toward
             // the LOW edge. The rendered white dot must sit inside it always.
@@ -1257,7 +1257,7 @@
                 const deg = (x) => Math.atan(Math.abs(x)) * 180 / Math.PI;
                 const e = currentEye;
                 const lines = [
-                    `status ${eyeStatus}   tracker ${ht.status}   infer ${ht.inferMs ? ht.inferMs.toFixed(1) + ' ms' : '—'}   ${fpsValue} fps`,
+                    `status ${eyeStatus}   tracker ${ht.status}   infer ${ht.inferMs ? ht.inferMs.toFixed(1) + ' ms' : '–'}   ${fpsValue} fps`,
                     `e = (${(e.x * 100).toFixed(1)}, ${(e.y * 100).toFixed(1)}, ${(e.z * 100).toFixed(1)}) cm   k=${calib.depthScale.toFixed(3)}   flips ${calib.flipX ? 'X' : '·'}${calib.flipY ? 'Y' : '·'}`,
                     `θ edges L/R/B/T = ${deg(t.L).toFixed(1)}/${deg(t.R).toFixed(1)}/${deg(t.B).toFixed(1)}/${deg(t.T).toFixed(1)}°   far cap L/R = ${(2 * deg(t.L)).toFixed(1)}/${(2 * deg(t.R)).toFixed(1)}°`,
                     `pane: pitch ${pose.pitchDeg}° roll ${pose.rollDeg}° heading ${pose.headingDeg}° (far edge → ${pose.headingDeg === 0 ? 'N' : pose.headingDeg + '°'})${ezLocked ? '   ez LOCKED ' + (ezLockValue * 100).toFixed(0) + 'cm' : ''}`,
@@ -1271,19 +1271,19 @@
         // ============================================
         // PROJECTION SELF-TESTS (webcam-free; prove the fidelity-critical math)
         // ============================================
-        // T1 antipode plumb invariant — for ANY eye e and ANY pane pose, the
+        // T1 antipode plumb invariant - for ANY eye e and ANY pane pose, the
         //    antipode must render where the GRAVITY ray from the eye pierces
         //    the glass (antipodePlumbScreenPoint). Flat pane, eye centered =>
         //    exact center px. Heading must not move it (down is invariant
         //    under rotation about the vertical).
-        // T2 2θ exit relation — a pixel ray at angle θ from the inward normal
+        // T2 2θ exit relation - a pixel ray at angle θ from the inward normal
         //    exits the globe at central angle exactly 2θ from the antipode
-        //    (chord geometry: t = 2R·cosθ) — pose-independent sphere geometry.
+        //    (chord geometry: t = 2R·cosθ) - pose-independent sphere geometry.
         //    Checked through Raycaster (exercises projectionMatrixInverse)
         //    AND against analytic tangents.
-        // T3 matrix round-trip — recover L,R,T,B,near,far from the assigned
+        // T3 matrix round-trip - recover L,R,T,B,near,far from the assigned
         //    matrix; guards the makePerspective arg order and any clobbering.
-        // T4 ring agreement (info) — default-eye far-side cap vs the legacy
+        // T4 ring agreement (info) - default-eye far-side cap vs the legacy
         //    41.0° "4x4 ft" ring drawn by createAntipodeProjection().
         function runProjectionSelfTests() {
             const W = CONFIG.WINDOW;
@@ -1326,20 +1326,20 @@
                         camera.projectionMatrix.makePerspective(tg.L * n, tg.R * n, tg.T * n, tg.B * n, n, f);
                         camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 
-                        // T1 — antipode at the gravity-plumb point on the glass
+                        // T1 - antipode at the gravity-plumb point on the glass
                         const p = A.clone().project(camera);
                         const s = antipodePlumbScreenPoint(e);
                         t1Max = Math.max(t1Max,
                             Math.abs(p.x - 2 * (s.x - rect.cx) / rect.w),
                             Math.abs(p.y - 2 * (s.y - rect.cy) / rect.h));
 
-                        // T1b — heading alone must not move the plumb point
+                        // T1b - heading alone must not move the plumb point
                         Object.assign(pose, { ...pc, headingDeg: pc.headingDeg + 137 });
                         const s2 = antipodePlumbScreenPoint(e);
                         t1HeadingMax = Math.max(t1HeadingMax, Math.abs(s2.x - s.x), Math.abs(s2.y - s.y));
                         Object.assign(pose, pc);
 
-                        // T2 — exit point at 2θ from the antipode, per sample pixel
+                        // T2 - exit point at 2θ from the antipode, per sample pixel
                         for (const [nx, ny] of ndcSamples) {
                             ray.setFromCamera({ x: nx, y: ny }, camera);
                             const d = ray.ray.direction;
@@ -1351,7 +1351,7 @@
                             t2MaxDir = Math.max(t2MaxDir, Math.abs(1 - d.dot(dAn)));
                             const cosTheta = d.dot(inwardNormal);
                             // Tilted panes can aim some pixels above the horizon
-                            // (those rays exit to the sky — physically correct);
+                            // (those rays exit to the sky - physically correct);
                             // the 2θ relation applies to into-the-Earth rays.
                             if (cosTheta <= 1e-6) continue;
                             const theta = Math.acos(Math.min(1, Math.max(-1, cosTheta)));
@@ -1360,7 +1360,7 @@
                             t2MaxAngle = Math.max(t2MaxAngle, Math.abs(exit.angleTo(A) - 2 * theta));
                         }
 
-                        // T3 — recover the bounds from the matrix elements
+                        // T3 - recover the bounds from the matrix elements
                         const te = camera.projectionMatrix.elements;
                         const nRec = te[14] / (te[10] - 1);
                         const fRec = te[14] / (te[10] + 1);
@@ -1394,7 +1394,7 @@
                 'T4 default cap vs 41.0° ring (info)': { value: `${capDefault.toFixed(2)}° (Δ ${ringDelta.toFixed(2)}°)`, pass: ringDelta < 1.5 },
             });
             console.log(pass ? '[window-projection self-tests] ALL PASS'
-                             : '[window-projection self-tests] FAILURE — see table');
+                             : '[window-projection self-tests] FAILURE - see table');
             // restore the live projection
             applyWindowProjection(camera, currentEye);
             return pass;
@@ -1634,10 +1634,10 @@
         // HEAD TRACKER MODULE (MediaPipe Tasks FaceLandmarker)
         // ============================================
         // Writes ONLY to window.headTracker (created synchronously by the
-        // classic script above — module scripts are deferred, so it always
+        // classic script above - module scripts are deferred, so it always
         // exists). Pull-based handshake: the render loop reads the latest
         // values each frame and never blocks on tracking.
-        // Pinned to @0.10.21 — bundle and wasm MUST share one version.
+        // Pinned to @0.10.21 - bundle and wasm MUST share one version.
         const ht = window.headTracker || (window.headTracker = { status: 'starting' });
         const fallbackTimer = setTimeout(() => {
             if (ht.status === 'starting') ht.status = 'fallback';

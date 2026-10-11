@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Through the Earth — NYC</title>
+<title>Through the Earth: NYC</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:#050508; color:#e8e8f0; font-family:'Segoe UI',system-ui,sans-serif;
@@ -27,7 +27,7 @@
 </style>
 </head>
 <body>
-<h1>Through the Earth — NYC → Antipode</h1>
+<h1>Through the Earth: NYC → Antipode</h1>
 
 <div class="btns">
   <button class="btn active" id="btn-12" onclick="setMode('12ft')">12 ft ceiling / 4 panels</button>
@@ -64,7 +64,7 @@ const MODES = {
   '24ft': {
     cap: 127, capRef: 73, max: 140,
     desc: '<strong>24 ft floor installation (proper projector required).</strong> ' +
-          'You see <strong>63.4° from straight down</strong> — wide cone, 26.6° above the horizon. ' +
+          'You see <strong>63.4° from straight down</strong>, a wide cone, 26.6° above the horizon. ' +
           'Almost the entire world except a cone centred on home (NYC). Dashed teal = 36.5° (12 ft reference).',
     legMain: '63.4° from straight down (24 ft)', legRef: '36.5° from straight down (12 ft)',
   },
@@ -179,7 +179,7 @@ function draw(geo){
   ctx.save();
   ctx.beginPath(); ctx.arc(CX,CY,315,0,7); ctx.clip();
 
-  // grid — POV angles (degrees from straight down); multiply by 2 for surface arc to get pixel radius
+  // grid - POV angles (degrees from straight down); multiply by 2 for surface arc to get pixel radius
   const povGrid = max<=90 ? [10,20,30,40] : [10,20,30,40,50,60];
   ctx.strokeStyle='rgba(50,90,110,.28)'; ctx.lineWidth=.6;
   povGrid.forEach(pov=>{ ctx.beginPath(); ctx.arc(CX,CY,pov*2*scale,0,7); ctx.stroke(); });
@@ -188,7 +188,7 @@ function draw(geo){
     ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(CX+315*Math.cos(r),CY+315*Math.sin(r)); ctx.stroke();
   }
 
-  // faint tint on the visible disc (clean arc fill — no polygon artifacts)
+  // faint tint on the visible disc (clean arc fill - no polygon artifacts)
   ctx.beginPath(); ctx.arc(CX,CY,cap*scale,0,7);
   ctx.fillStyle='rgba(30,77,90,.16)'; ctx.fill();
 
@@ -200,7 +200,7 @@ function draw(geo){
       else if(g.type==='MultiPolygon') g.coordinates.forEach(p=>allRings.push(...p));
     });
 
-    // coastlines as OUTLINES only — filling them produces projection wedges
+    // coastlines as OUTLINES only - filling them produces projection wedges
     // because split polygons get closed with straight edges across the map.
     ctx.beginPath(); drawRings(ctx,allRings,scale);
     ctx.strokeStyle='rgba(90,140,150,.32)'; ctx.lineWidth=.6; ctx.stroke();
@@ -257,7 +257,7 @@ function draw(geo){
     ctx.font=(inside||edge)?'11px system-ui':'10px system-ui';
     ctx.textAlign=pt.x<CX?'right':'left';
     const pov = (c.d/2).toFixed(1);
-    const label = c.d===180 ? `${c.n} (you — horizon)` : `${c.n} ${pov}°`;
+    const label = c.d===180 ? `${c.n} (you: horizon)` : `${c.n} ${pov}°`;
     ctx.fillText(label, pt.x+(pt.x<CX?-7:7), pt.y+4);
   });
 

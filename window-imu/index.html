@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Earth Window — iPad IMU Antipode View</title>
+    <title>Earth Window: iPad IMU Antipode View</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -50,7 +50,7 @@
         
         /* Plumb marker: predicted screen point directly beneath the eye.
            The rendered white antipode dot must sit inside this ring at all
-           times (live calibration invariant) — position driven by JS. */
+           times (live calibration invariant) - position driven by JS. */
         #crosshair {
             position: absolute;
             top: 50%;
@@ -195,7 +195,7 @@
             you see through the planet. Flat on your palms = the antipode;
             tilt it to sweep the far hemisphere.<br>
             <small>Pinch = viewing distance · N ⟲ = point top edge north, tap, to true-up the compass</small><br>
-            <button id="start-btn">Tap to start — allows motion &amp; orientation</button>
+            <button id="start-btn">Tap to start (allows motion &amp; orientation)</button>
         </div>
     </div>
     <div id="controls-hint">IMU window · pinch = eye distance · N⟲ true-up compass · desktop: T keyboard-eye · [ ] 9 0 , . manual pane · O flip screen-rotation sign · H R P toggles · F fullscreen</div>
@@ -228,7 +228,7 @@
         };
 
         // ============================================
-        // WINDOW / IMU CONFIGURATION (iPad build — no camera)
+        // WINDOW / IMU CONFIGURATION (iPad build - no camera)
         // ============================================
         // The iPad is a pane of glass aimed by its IMU. The virtual Earth is
         // anchored to REAL gravity (DeviceOrientation beta/gamma, absolute)
@@ -236,12 +236,12 @@
         // SCREEN FRAME: origin at glass center, +x = screen right, +y =
         // toward the top edge, +z = out of the glass toward the viewer (m).
         // EYE MODEL: held at arm's length with the glass normal to your line
-        // of sight, the eye is exactly (0, 0, eyeDistance) in this frame —
+        // of sight, the eye is exactly (0, 0, eyeDistance) in this frame –
         // the one posture where a fixed eye is the truth, not an
         // approximation. Pinch adjusts eyeDistance (= field of view).
         CONFIG.WINDOW = {
-            screenWidth: 0.2476,   // physical glass width (m) — 11" iPad ≈ 0.2476; 12.9/13" ≈ 0.2807; mini ≈ 0.1958
-            screenHeight: 0.1785,  // physical glass height (m) — 11" ≈ 0.1785; 12.9/13" ≈ 0.2147; mini ≈ 0.1284
+            screenWidth: 0.2476,   // physical glass width (m) - 11" iPad ≈ 0.2476; 12.9/13" ≈ 0.2807; mini ≈ 0.1958
+            screenHeight: 0.1785,  // physical glass height (m) - 11" ≈ 0.1785; 12.9/13" ≈ 0.2147; mini ≈ 0.1284
             eyeDistance: 0.55,     // glass -> eye along the normal (m); pinch to adjust [0.20, 1.20]
             nearFactor: 1e-3,      // near plane = globeRadius * this (depth precision, not geometry)
             farFactor: 50,         // far plane = globeRadius * this (covers the starfield)
@@ -448,7 +448,7 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(CONFIG.backgroundColor);
             
-            // Camera object — its pose and projection are fully managed by
+            // Camera object - its pose and projection are fully managed by
             // setupWindowCamera()/applyWindowProjection() (off-axis window
             // model). The constructor args here are immediately superseded.
             camera = new THREE.PerspectiveCamera(
@@ -626,7 +626,7 @@
 
             // Debug-overlay groups: rings toggle with 'R'; the white antipode
             // dot toggles with the plumb marker 'P' (they form the live
-            // calibration pair — predicted vs rendered antipode position).
+            // calibration pair - predicted vs rendered antipode position).
             ringsGroup = new THREE.Group();
             antipodeDotGroup = new THREE.Group();
             scene.add(ringsGroup);
@@ -898,14 +898,14 @@
         //
         // The camera POSITION stays pinned to the observer surface point P:
         // at globe scale (1 unit = 254.84 m) the real eye sits ~1.6e-3 units
-        // above the glass — below one fp32 ulp at coordinate 25000, i.e. not
+        // above the glass - below one fp32 ulp at coordinate 25000, i.e. not
         // even representable as a distinct GPU vertex-space position. All of
         // the eye geometry is therefore carried by the asymmetric frustum
         // tangents (dimensionless, O(1)), which is exact in angle and
         // numerically ideal. Proven at startup by runProjectionSelfTests().
 
         // Frustum tangents: eye -> each window edge, in units of ez.
-        // These depend on BOTH distance ez AND lateral offset (ex,ey) —
+        // These depend on BOTH distance ez AND lateral offset (ex,ey) –
         // that coupling IS the head-coupled window effect.
         function computeFrustumTangents(e, rect) {
             const ex = e.x - rect.cx, ey = e.y - rect.cy;
@@ -963,12 +963,12 @@
         // The virtual Earth is anchored to REAL gravity/north: room axes map
         // to (east, north, up) at the observer point. The screen is a pane
         // whose orientation in the room is `pose` (heading, then pitch, then
-        // roll — intrinsic). Tilting the pane re-aims it through the fixed
+        // roll - intrinsic). Tilting the pane re-aims it through the fixed
         // underground panorama; the antipode stays gravity-down regardless.
         //
         // Because the eye is measured in the SCREEN frame (webcam rigid to
         // the glass) and the window stays the z=0 rectangle of that frame,
-        // the off-axis frustum is UNCHANGED by pose — only the camera's
+        // the off-axis frustum is UNCHANGED by pose - only the camera's
         // orientation in the virtual world rotates. (The pane's positional
         // offset when propped up is centimeters = sub-fp32-ulp at globe
         // scale, so the camera stays at P; same argument as the eye height.)
@@ -999,7 +999,7 @@
         }
 
         // Where the gravity ray from eye e pierces the glass (screen coords,
-        // meters) — the predicted on-screen position of the antipode. Null if
+        // meters) - the predicted on-screen position of the antipode. Null if
         // the pane is tilted near/past vertical so straight-down misses it.
         function antipodePlumbScreenPoint(e) {
             const d = downInScreenFrame();
@@ -1023,7 +1023,7 @@
             camera.position.copy(observerPos);
             updateCameraOrientation();
             // The stock PerspectiveCamera method would clobber the off-axis
-            // matrix with a symmetric one — route any caller back to ours.
+            // matrix with a symmetric one - route any caller back to ours.
             camera.updateProjectionMatrix = function () {
                 applyWindowProjection(camera, currentEye);
             };
@@ -1040,7 +1040,7 @@
         //  1. UI rotation: angles are reported in the device's NATURAL frame;
         //     the CSS/canvas frame is rotated by screen.orientation.angle, so
         //     post-multiply Rz(screenAngleSign·angle), sign default -1 per the
-        //     Screen Orientation spec. 'O' flips it if a browser disagrees —
+        //     Screen Orientation spec. 'O' flips it if a browser disagrees –
         //     the marble test exposes that in seconds. (Or just lock the
         //     iPad's rotation and the correction stays constant.)
         //  2. True north: iOS alpha is gyro-relative (arbitrary zero).
@@ -1089,7 +1089,7 @@
         }
 
         // iOS 13+: motion access requires a permission request made inside a
-        // user gesture — hence the tap-to-start overlay.
+        // user gesture - hence the tap-to-start overlay.
         async function startImu() {
             try {
                 if (imu.supported && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -1119,7 +1119,7 @@
         }
 
         // ============================================
-        // ONE-EURO FILTER (Casiez et al., CHI 2012) — meter/second units
+        // ONE-EURO FILTER (Casiez et al., CHI 2012) - meter/second units
         // ============================================
         class OneEuroFilter {
             constructor(minCutoff, beta, dCutoff) {
@@ -1141,7 +1141,7 @@
         }
         // One-Euro smoothing on quaternion COMPONENTS (hemisphere-corrected,
         // renormalized). Filtering Euler angles would misbehave near the
-        // beta=±90 gimbal region — exactly the held-upright posture;
+        // beta=±90 gimbal region - exactly the held-upright posture;
         // component space has no singularities.
         class QuatOneEuro {
             constructor(p) {
@@ -1176,7 +1176,7 @@
         // INPUT: debug toggles, calibration, keyboard-eye override
         // ============================================
         // 'T' toggles keyboard-eye mode: a simulated eye you steer with
-        // arrows/WASD (+/-/wheel for distance) — works with no webcam and
+        // arrows/WASD (+/-/wheel for distance) - works with no webcam and
         // gives deterministic screenshots for testing the projection.
         function onKeyDown(ev) {
             if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
@@ -1315,7 +1315,7 @@
                 fpsFrames = 0; fpsLast = nowMs;
             }
 
-            // Plumb marker: predicted screen position of the antipode — where
+            // Plumb marker: predicted screen position of the antipode - where
             // the gravity ray from the eye pierces the glass (self-test T1).
             // Flat pane: directly beneath the eye. Tilted pane: slides toward
             // the LOW edge. The rendered white dot must sit inside it always.
@@ -1344,7 +1344,7 @@
                 const tiltDeg = Math.acos(Math.max(-1, Math.min(1, m[10]))) * 180 / Math.PI;
                 const bearing = getFarEdgeBearingDeg();
                 const lines = [
-                    `status ${eyeStatus}   ${imu.haveCompass ? 'compass ✓' : 'compass —'}   ${fpsValue} fps`,
+                    `status ${eyeStatus}   ${imu.haveCompass ? 'compass ✓' : 'compass –'}   ${fpsValue} fps`,
                     `eye distance ${(currentEye.z * 100).toFixed(0)} cm (pinch)   θ edges L/R/B/T = ${deg(t.L).toFixed(1)}/${deg(t.R).toFixed(1)}/${deg(t.B).toFixed(1)}/${deg(t.T).toFixed(1)}°`,
                     `pane: tilt ${tiltDeg.toFixed(1)}° from flat   far edge → ${bearing.toFixed(0)}°${bearing < 3 || bearing > 357 ? ' (N)' : ''}   far cap L/R = ${(2 * deg(t.L)).toFixed(1)}/${(2 * deg(t.R)).toFixed(1)}°`,
                     selfTestSummary || 'self-tests: running…',
@@ -1357,19 +1357,19 @@
         // ============================================
         // PROJECTION SELF-TESTS (webcam-free; prove the fidelity-critical math)
         // ============================================
-        // T1 antipode plumb invariant — for ANY eye e and ANY pane pose, the
+        // T1 antipode plumb invariant - for ANY eye e and ANY pane pose, the
         //    antipode must render where the GRAVITY ray from the eye pierces
         //    the glass (antipodePlumbScreenPoint). Flat pane, eye centered =>
         //    exact center px. Heading must not move it (down is invariant
         //    under rotation about the vertical).
-        // T2 2θ exit relation — a pixel ray at angle θ from the inward normal
+        // T2 2θ exit relation - a pixel ray at angle θ from the inward normal
         //    exits the globe at central angle exactly 2θ from the antipode
-        //    (chord geometry: t = 2R·cosθ) — pose-independent sphere geometry.
+        //    (chord geometry: t = 2R·cosθ) - pose-independent sphere geometry.
         //    Checked through Raycaster (exercises projectionMatrixInverse)
         //    AND against analytic tangents.
-        // T3 matrix round-trip — recover L,R,T,B,near,far from the assigned
+        // T3 matrix round-trip - recover L,R,T,B,near,far from the assigned
         //    matrix; guards the makePerspective arg order and any clobbering.
-        // T4 ring agreement (info) — default-eye far-side cap vs the legacy
+        // T4 ring agreement (info) - default-eye far-side cap vs the legacy
         //    41.0° "4x4 ft" ring drawn by createAntipodeProjection().
         function runProjectionSelfTests() {
             const W = CONFIG.WINDOW;
@@ -1404,7 +1404,7 @@
             imu.active = false;  // tests drive the manual-pose path deterministically
             let t1Max = 0, t1HeadingMax = 0, t2MaxAngle = 0, t2MaxDir = 0, t2MaxSphere = 0, t3Max = 0;
 
-            // T5 — the IMU quaternion path must equal the manual-matrix path:
+            // T5 - the IMU quaternion path must equal the manual-matrix path:
             // pose (pitch p, roll r, heading hd) == deviceorientation
             // (alpha=-hd, beta=-p, gamma=-r) at screen angle 0, by the W3C
             // Z-X'-Y'' convention. |q·q'| = 1 within fp for every pose case.
@@ -1426,20 +1426,20 @@
                         camera.projectionMatrix.makePerspective(tg.L * n, tg.R * n, tg.T * n, tg.B * n, n, f);
                         camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 
-                        // T1 — antipode at the gravity-plumb point on the glass
+                        // T1 - antipode at the gravity-plumb point on the glass
                         const p = A.clone().project(camera);
                         const s = antipodePlumbScreenPoint(e);
                         t1Max = Math.max(t1Max,
                             Math.abs(p.x - 2 * (s.x - rect.cx) / rect.w),
                             Math.abs(p.y - 2 * (s.y - rect.cy) / rect.h));
 
-                        // T1b — heading alone must not move the plumb point
+                        // T1b - heading alone must not move the plumb point
                         Object.assign(pose, { ...pc, headingDeg: pc.headingDeg + 137 });
                         const s2 = antipodePlumbScreenPoint(e);
                         t1HeadingMax = Math.max(t1HeadingMax, Math.abs(s2.x - s.x), Math.abs(s2.y - s.y));
                         Object.assign(pose, pc);
 
-                        // T2 — exit point at 2θ from the antipode, per sample pixel
+                        // T2 - exit point at 2θ from the antipode, per sample pixel
                         for (const [nx, ny] of ndcSamples) {
                             ray.setFromCamera({ x: nx, y: ny }, camera);
                             const d = ray.ray.direction;
@@ -1451,7 +1451,7 @@
                             t2MaxDir = Math.max(t2MaxDir, Math.abs(1 - d.dot(dAn)));
                             const cosTheta = d.dot(inwardNormal);
                             // Tilted panes can aim some pixels above the horizon
-                            // (those rays exit to the sky — physically correct);
+                            // (those rays exit to the sky - physically correct);
                             // the 2θ relation applies to into-the-Earth rays.
                             if (cosTheta <= 1e-6) continue;
                             const theta = Math.acos(Math.min(1, Math.max(-1, cosTheta)));
@@ -1460,7 +1460,7 @@
                             t2MaxAngle = Math.max(t2MaxAngle, Math.abs(exit.angleTo(A) - 2 * theta));
                         }
 
-                        // T3 — recover the bounds from the matrix elements
+                        // T3 - recover the bounds from the matrix elements
                         const te = camera.projectionMatrix.elements;
                         const nRec = te[14] / (te[10] - 1);
                         const fRec = te[14] / (te[10] + 1);
@@ -1497,7 +1497,7 @@
                 'T4 default-eye cap (info)': { value: `${capDefault.toFixed(2)}° (Δ41.0°-ring ${ringDelta.toFixed(2)}°)`, pass: true },
             });
             console.log(pass ? '[window-projection self-tests] ALL PASS'
-                             : '[window-projection self-tests] FAILURE — see table');
+                             : '[window-projection self-tests] FAILURE - see table');
             // restore the live projection
             applyWindowProjection(camera, currentEye);
             return pass;
