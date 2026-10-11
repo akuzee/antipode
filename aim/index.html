@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Point Through the Earth — Arm Aim Calculator</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#050508; color:#e8e8f0;
+    font-family:'Segoe UI', system-ui, sans-serif;
+    min-height:100vh; display:flex; justify-content:center; padding:40px 16px;
+  }
+  .wrap { width:100%; max-width:720px; }
+  h1 { font-size:20px; font-weight:600; letter-spacing:.3px; margin-bottom:4px; }
+  .sub { color:#7a8a90; font-size:13px; margin-bottom:22px; line-height:1.5; }
+  label { font-size:11px; color:#7a8a90; text-transform:uppercase; letter-spacing:.6px;
+          display:block; margin-bottom:6px; }
+  input, textarea {
+    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.12);
+    color:#fff; padding:10px 12px; border-radius:10px; font-size:14px;
+    font-family:inherit; width:100%; transition:border-color .2s;
+  }
+  input:focus, textarea:focus { outline:none; border-color:#4ecdc4; }
+  textarea { min-height:120px; resize:vertical; line-height:1.6; }
+  .block { margin-bottom:16px; }
+  .barrow { display:flex; gap:12px; align-items:flex-end; margin-bottom:8px; }
+  .barrow .field { flex:1; }
+  button {
+    background:linear-gradient(135deg, rgba(78,205,196,.25), rgba(40,80,80,.9));
+    border:1px solid rgba(78,205,196,.45); color:#4ecdc4;
+    padding:11px 18px; border-radius:12px; cursor:pointer; font-size:14px;
+    font-family:inherit; font-weight:600; letter-spacing:.4px; transition:all .2s; white-space:nowrap;
+  }
+  button:hover { border-color:#4ecdc4; background:linear-gradient(135deg, rgba(78,205,196,.4), rgba(60,120,120,.9)); }
+  .obs { font-size:12px; color:#7a8a90; margin:4px 0 18px; }
+  .obs span { color:#4ecdc4; }
+  table { width:100%; border-collapse:collapse; margin-top:18px; font-variant-numeric:tabular-nums; }
+  th, td { text-align:right; padding:8px 10px; font-size:13px; border-bottom:1px solid rgba(255,255,255,.06); }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:#7a8a90; font-size:11px; text-transform:uppercase; letter-spacing:.5px; cursor:pointer; user-select:none; }
+  th:hover, th.active { color:#4ecdc4; }
+  td.city { color:#fff; }
+  td.az  { color:#ffaa44; }
+  td.nad { color:#4ecdc4; }
+  tr.fail td { color:#ff6b6b; text-align:left; }
+  .hint { color:#566; font-size:12px; margin-top:20px; line-height:1.6; }
+  .status { color:#7a8a90; font-size:12px; margin-top:10px; }
+  .maps { margin-top:28px; }
+  .maptitle { font-size:11px; color:#7a8a90; text-transform:uppercase; letter-spacing:.6px; margin:22px 0 8px; }
+  canvas { width:100%; border-radius:12px; border:1px solid rgba(255,255,255,.08); display:block; background:#0a1014; }
+  .panels { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:14px; margin-top:8px; }
+  .panel .cap { font-size:12px; color:#e8e8f0; margin:8px 2px 4px; }
+  .panel .cap small { color:#7a8a90; }
+  .flipnote { font-size:11px; color:#566; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Point Through the Earth — batch + map</h1>
+  <p class="sub">Facing north at your location, this lists which way to face and how far to tip your arm
+  down to point — through the planet — at each city, and plots them on a map flipped east–west, the way
+  the far side actually looks when you stare down through the Earth.</p>
+
+  <div class="barrow">
+    <div class="field">
+      <label>Observer (you)</label>
+      <input id="observer" value="New York" placeholder="city, or 'lat, lon'">
+    </div>
+  </div>
+  <div class="obs" id="obsResolved"></div>
+
+  <div class="block">
+    <label>Target cities — one per line</label>
+    <textarea id="targets" placeholder="Perth&#10;Sydney&#10;Antananarivo&#10;McMurdo Station">Perth
+Adelaide
+Melbourne
+Sydney
+Brisbane
+Antananarivo
+Cape Town
+McMurdo Station</textarea>
+  </div>
+
+  <button id="go">Compute all</button>
+  <div class="status" id="status"></div>
+
+  <table id="tbl" style="display:none">
+    <thead>
+      <tr>
+        <th data-k="name">City</th>
+        <th data-k="az">Face</th>
+        <th data-k="nadir">From straight-down</th>
+        <th data-k="depression">Below horizon</th>
+        <th data-k="deltaDeg">Δ surface</th>
+        <th data-k="coord">Coords</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="maps" id="maps"></div>
+
+  <p class="hint">Math: from straight-down (your antipode) swing toward the target by half its angular
+  distance from the antipode. Depression below horizon = Δ/2; azimuth = great-circle initial bearing.
+  Map is mirrored east–west to match the through-the-Earth view. Geocoding via Open-Meteo, coastlines
+  via Natural Earth.</p>
+</div>
+
+<script>
+const DEG = Math.PI/180, RAD = 180/Math.PI;
+const PALETTE = ['#4ecdc4','#ffaa44','#ff6b6b','#a78bfa','#6ee7b7','#f472b6','#60a5fa','#fbbf24'];
+
+function compass(az){
+  const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(az/22.5)%16];
+}
+function aim(lat1,lon1,lat2,lon2){
+  const f1=lat1*DEG, f2=lat2*DEG, dL=(lon2-lon1)*DEG;
+  let cosD = Math.sin(f1)*Math.sin(f2) + Math.cos(f1)*Math.cos(f2)*Math.cos(dL);
+  cosD = Math.max(-1, Math.min(1, cosD));
+  const D = Math.acos(cosD);
+  const y = Math.sin(dL)*Math.cos(f2);
+  const x = Math.cos(f1)*Math.sin(f2) - Math.sin(f1)*Math.cos(f2)*Math.cos(dL);
+  let az = Math.atan2(y,x)*RAD; az = (az+360)%360;
+  return { az, depression:(D/2)*RAD, nadir:(90-(D/2)*RAD), deltaDeg:D*RAD };
+}
+function gc(a,b){
+  const la1=a.lat*DEG, la2=b.lat*DEG, dlon=(a.lon-b.lon)*DEG;
+  let c = Math.sin(la1)*Math.sin(la2)+Math.cos(la1)*Math.cos(la2)*Math.cos(dlon);
+  return Math.acos(Math.max(-1,Math.min(1,c)))*RAD;
+}
+async function resolve(q){
+  q = q.trim();
+  const m = q.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if(m) return {lat:+m[1], lon:+m[2], name:`${m[1]}, ${m[2]}`, cc:''};
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+  const r = await fetch(url); const j = await r.json();
+  if(!j.results || !j.results.length) throw new Error('not found');
+  const c = j.results[0];
+  return {lat:c.latitude, lon:c.longitude, name:`${c.name}${c.country_code?', '+c.country_code:''}`, cc:c.country_code||''};
+}
+
+let LAND=null;
+async function loadLand(){
+  if(LAND) return LAND;
+  const urls=[
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson',
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+  ];
+  for(const u of urls){ try{ const r=await fetch(u); if(r.ok){ LAND=await r.json(); return LAND; } }catch(e){} }
+  throw new Error('map data failed');
+}
+
+// Mirrored equirectangular projection within a [minLon,maxLon,minLat,maxLat] box.
+function makeProject(box, w, h){
+  const [m0,m1,la0,la1] = box;
+  return (lon,lat)=>[ (m1-lon)/(m1-m0)*w, (la1-lat)/(la1-la0)*h ];  // east->left (mirror), north up
+}
+function drawLand(ctx, geo, project){
+  ctx.fillStyle = '#243a42';
+  ctx.strokeStyle = 'rgba(120,180,190,0.25)';
+  ctx.lineWidth = 0.6;
+  const drawPoly = poly=>{
+    ctx.beginPath();
+    poly.forEach(ring=>{
+      ring.forEach((c,i)=>{ const [x,y]=project(c[0],c[1]); i? ctx.lineTo(x,y): ctx.moveTo(x,y); });
+      ctx.closePath();
+    });
+    ctx.fill('evenodd'); ctx.stroke();
+  };
+  geo.features.forEach(f=>{
+    const g=f.geometry; if(!g) return;
+    if(g.type==='Polygon') drawPoly(g.coordinates);
+    else if(g.type==='MultiPolygon') g.coordinates.forEach(drawPoly);
+  });
+}
+function drawDot(ctx, project, d, color, label){
+  const [x,y]=project(d.lon,d.lat);
+  ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fillStyle=color; ctx.fill();
+  ctx.lineWidth=1.5; ctx.strokeStyle='#fff'; ctx.stroke();
+  if(label){
+    ctx.fillStyle='#e8e8f0'; ctx.font='11px system-ui';
+    ctx.fillText(label, x+7, y+3);
+  }
+}
+function drawMarker(ctx, project, lat, lon){     // antipode = straight-down center
+  const [x,y]=project(lon,lat);
+  ctx.strokeStyle='#ffaa44'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(x,y,7,0,7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-11,y); ctx.lineTo(x+11,y); ctx.moveTo(x,y-11); ctx.lineTo(x,y+11); ctx.stroke();
+}
+
+// single-linkage clustering by great-circle distance
+function cluster(dots, thr){
+  const parent = dots.map((_,i)=>i);
+  const find = i=> parent[i]===i? i : (parent[i]=find(parent[i]));
+  for(let i=0;i<dots.length;i++) for(let j=i+1;j<dots.length;j++)
+    if(gc(dots[i],dots[j])<thr) parent[find(i)]=find(j);
+  const groups={};
+  dots.forEach((d,i)=>{ const r=find(i); (groups[r]=groups[r]||[]).push(d); });
+  return Object.values(groups);
+}
+
+const $ = id => document.getElementById(id);
+let results = [], sortKey='nadir', sortAsc=true, obs=null, antipode=null;
+
+function render(){
+  const rows=$('rows'); rows.innerHTML='';
+  const ok=results.filter(r=>!r.fail).slice().sort((a,b)=>{
+    if(sortKey==='name') return sortAsc? a.name.localeCompare(b.name): b.name.localeCompare(a.name);
+    const va=sortKey==='coord'? a.lat:a[sortKey], vb=sortKey==='coord'? b.lat:b[sortKey];
+    return sortAsc? va-vb: vb-va;
+  });
+  for(const r of ok) rows.insertAdjacentHTML('beforeend',
+    `<tr><td class="city">${r.name}</td><td class="az">${r.az.toFixed(0)}° ${compass(r.az)}</td>
+     <td class="nad">${r.nadir.toFixed(1)}°</td><td>${r.depression.toFixed(1)}°</td>
+     <td>${r.deltaDeg.toFixed(1)}°</td><td>${r.lat.toFixed(1)}, ${r.lon.toFixed(1)}</td></tr>`);
+  for(const r of results.filter(r=>r.fail))
+    rows.insertAdjacentHTML('beforeend', `<tr class="fail"><td colspan="6">✕ couldn't find "${r.q}"</td></tr>`);
+  document.querySelectorAll('th').forEach(th=>th.classList.toggle('active', th.dataset.k===sortKey));
+  $('tbl').style.display = results.length? 'table':'none';
+}
+
+async function renderMaps(){
+  const maps=$('maps'); maps.innerHTML='';
+  const dots=results.filter(r=>!r.fail);
+  if(!dots.length) return;
+  let geo;
+  try{ maps.innerHTML='<div class="maptitle">loading map…</div>'; geo=await loadLand(); }
+  catch(e){ maps.innerHTML=`<div class="status">Map data unavailable (${e.message})</div>`; return; }
+  maps.innerHTML='';
+
+  // assign a stable cluster color to each dot
+  const groups = cluster(dots, 32);
+  groups.forEach((g,gi)=> g.forEach(d=> d._color = PALETTE[gi%PALETTE.length]));
+
+  // 1) whole-world mirrored map
+  maps.insertAdjacentHTML('beforeend','<div class="maptitle">Through-the-Earth view (mirrored) — ◎ = straight down (your antipode)</div>');
+  const W=Math.min(maps.clientWidth||680, 680), H=Math.round(W/2);
+  const world=document.createElement('canvas'); world.width=W; world.height=H; maps.appendChild(world);
+  const wc=world.getContext('2d');
+  const wproj=makeProject([-180,180,-90,90],W,H);
+  drawLand(wc, geo, wproj);
+  drawMarker(wc, wproj, antipode.lat, antipode.lon);
+  dots.forEach(d=>drawDot(wc, wproj, d, d._color, d.name.split(',')[0]));
+  maps.insertAdjacentHTML('beforeend','<div class="flipnote">East is on the left — text/shapes look reversed because you’re seeing the far side from the inside.</div>');
+
+  // 2) per-cluster zoom panels
+  if(groups.length){
+    maps.insertAdjacentHTML('beforeend','<div class="maptitle">Region close-ups</div>');
+    const panels=document.createElement('div'); panels.className='panels'; maps.appendChild(panels);
+    groups.sort((a,b)=>b.length-a.length).forEach((g,gi)=>{
+      const lats=g.map(d=>d.lat), lons=g.map(d=>d.lon);
+      const pad=7;
+      let box=[Math.min(...lons)-pad, Math.max(...lons)+pad, Math.max(-90,Math.min(...lats)-pad), Math.min(90,Math.max(...lats)+pad)];
+      const midLat=(box[2]+box[3])/2;
+      const lonSpan=(box[1]-box[0])*Math.cos(midLat*DEG), latSpan=box[3]-box[2];
+      const pw=320, ph=Math.max(150, Math.min(360, Math.round(pw*(latSpan/Math.max(lonSpan,1)))));
+      const ccs=[...new Set(g.map(d=>d.cc).filter(Boolean))].join(' ');
+      const wrap=document.createElement('div'); wrap.className='panel';
+      wrap.innerHTML=`<div class="cap">${g.map(d=>d.name.split(',')[0]).join(' · ')} <small>${ccs}</small></div>`;
+      const cv=document.createElement('canvas'); cv.width=pw; cv.height=ph; cv.style.width='100%'; wrap.appendChild(cv);
+      panels.appendChild(wrap);
+      const ctx=cv.getContext('2d');
+      ctx.fillStyle='#0a1014'; ctx.fillRect(0,0,pw,ph);
+      ctx.save(); ctx.beginPath(); ctx.rect(0,0,pw,ph); ctx.clip();
+      const pproj=makeProject(box,pw,ph);
+      drawLand(ctx, geo, pproj);
+      if(antipode.lat>=box[2]&&antipode.lat<=box[3]&&antipode.lon>=box[0]&&antipode.lon<=box[1])
+        drawMarker(ctx, pproj, antipode.lat, antipode.lon);
+      g.forEach(d=>drawDot(ctx, pproj, d, d._color, d.name.split(',')[0]));
+      ctx.restore();
+    });
+  }
+}
+
+async function run(){
+  $('status').textContent='Looking up…';
+  try{ obs=await resolve($('observer').value); }
+  catch(e){ $('status').textContent=`Couldn't find observer "${$('observer').value}"`; return; }
+  antipode={ lat:-obs.lat, lon:(((obs.lon+180)+540)%360)-180 };  // wrap to [-180,180]
+  $('obsResolved').innerHTML=`Observer: <span>${obs.name}</span> (${obs.lat.toFixed(2)}, ${obs.lon.toFixed(2)}) — antipode at ${antipode.lat.toFixed(2)}, ${antipode.lon.toFixed(2)}`;
+
+  const queries=$('targets').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  results=await Promise.all(queries.map(async q=>{
+    try{ const t=await resolve(q); return {...aim(obs.lat,obs.lon,t.lat,t.lon), name:t.name, lat:t.lat, lon:t.lon, cc:t.cc}; }
+    catch(e){ return {fail:true, q}; }
+  }));
+  $('status').textContent=`${results.filter(r=>!r.fail).length} of ${queries.length} resolved`;
+  render();
+  renderMaps();
+}
+
+document.querySelectorAll('th').forEach(th=> th.addEventListener('click',()=>{
+  const k=th.dataset.k; if(sortKey===k) sortAsc=!sortAsc; else {sortKey=k; sortAsc=true;} render();
+}));
+$('go').addEventListener('click', run);
+run();
+</script>
+</body>
+</html>

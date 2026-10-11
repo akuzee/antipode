@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Through the Earth — NYC</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#050508; color:#e8e8f0; font-family:'Segoe UI',system-ui,sans-serif;
+         display:flex; flex-direction:column; align-items:center; padding:30px 16px; gap:14px; }
+  h1 { font-size:17px; font-weight:600; letter-spacing:.3px; }
+  .sub { font-size:12px; color:#7a8a90; text-align:center; line-height:1.6; max-width:560px; }
+  .sub strong { color:#4ecdc4; }
+  canvas { display:block; border-radius:50%; border:1px solid rgba(255,255,255,.07); }
+  .btns { display:flex; gap:10px; }
+  .btn {
+    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.12);
+    color:#7a8a90; padding:9px 18px; border-radius:20px; cursor:pointer;
+    font-size:13px; font-family:inherit; font-weight:500; letter-spacing:.3px; transition:all .2s;
+  }
+  .btn:hover { border-color:rgba(255,255,255,.3); color:#e8e8f0; }
+  .btn.active { background:rgba(78,205,196,.15); border-color:rgba(78,205,196,.5); color:#4ecdc4; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; font-size:11px; color:#7a8a90; }
+  .legend span { display:flex; align-items:center; gap:5px; }
+  .sw { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .sw.line { border-radius:0; height:2px; width:16px; }
+  #status { font-size:12px; color:#7a8a90; }
+</style>
+</head>
+<body>
+<h1>Through the Earth — NYC → Antipode</h1>
+
+<div class="btns">
+  <button class="btn active" id="btn-12" onclick="setMode('12ft')">12 ft ceiling / 4 panels</button>
+  <button class="btn" id="btn-24" onclick="setMode('24ft')">24 ft floor installation</button>
+</div>
+
+<p class="sub" id="desc"></p>
+<canvas id="c" width="680" height="680"></canvas>
+<div id="status">Loading map…</div>
+<div class="legend">
+  <span><div class="sw" style="background:#4ecdc4;border:1px solid rgba(255,255,255,.5)"></div><span id="leg-in">Inside cap</span></span>
+  <span><div class="sw" style="background:#ff6b6b;border:1px solid rgba(255,255,255,.5)"></div>On the edge</span>
+  <span><div class="sw" style="background:rgba(120,140,150,.5);border:1px solid rgba(255,255,255,.15)"></div>Outside (context)</span>
+  <span><div class="sw line" style="background:#ffaa44"></div><span id="leg-main">Cap boundary</span></span>
+  <span><div class="sw line" style="background:rgba(78,205,196,.4)"></div><span id="leg-ref">Reference</span></span>
+  <span><div class="sw" style="background:#ffaa44"></div>Antipode = straight down</span>
+</div>
+
+<script>
+const D2R=Math.PI/180, R2D=180/Math.PI;
+const ANT={lat:-40.71, lon:105.99};
+const W=680, H=680, CX=340, CY=340;
+
+// All angles are POV: degrees from straight down (0=antipode, 90=horizon).
+// City .d values below are surface arcs; divide by 2 for POV angle.
+const MODES = {
+  '12ft': {
+    cap: 73, capRef: 56, max: 88,
+    desc: '<strong>12 ft ceiling, Vankyo LS470W, 4-panel quadrant trace → 8.8 ft assembled circle.</strong> ' +
+          'You see <strong>36.5° from straight down</strong> (dashed teal = 28° for 9 ft reference). ' +
+          'All of Australia, SE Asia, East & South Africa, India\'s coasts.',
+    legMain: '36.5° from straight down (12 ft)', legRef: '28° from straight down (9 ft)',
+  },
+  '24ft': {
+    cap: 127, capRef: 73, max: 140,
+    desc: '<strong>24 ft floor installation (proper projector required).</strong> ' +
+          'You see <strong>63.4° from straight down</strong> — wide cone, 26.6° above the horizon. ' +
+          'Almost the entire world except a cone centred on home (NYC). Dashed teal = 36.5° (12 ft reference).',
+    legMain: '63.4° from straight down (24 ft)', legRef: '36.5° from straight down (12 ft)',
+  },
+};
+
+const CITIES_12 = [
+  {n:'Perth',        lat:-31.95,lon:115.86,d:12.1},
+  {n:'Kalgoorlie',   lat:-30.75,lon:121.47,d:16.2},
+  {n:'Exmouth',      lat:-21.83,lon:114.17,d:20.2},
+  {n:'Port Hedland', lat:-20.31,lon:118.57,d:22.9},
+  {n:'Broome',       lat:-17.96,lon:122.24,d:26.7},
+  {n:'Adelaide',     lat:-34.93,lon:138.60,d:26.3},
+  {n:'Kerguelen Is', lat:-49.35,lon:69.35, d:27.0},
+  {n:'Melbourne',    lat:-37.81,lon:144.96,d:30.1},
+  {n:'Jakarta',      lat: -6.21,lon:106.85,d:34.5},
+  {n:'Sydney',       lat:-33.87,lon:151.21,d:36.3},
+  {n:'Darwin',       lat:-12.46,lon:130.84,d:35.7},
+  {n:'Brisbane',     lat:-27.47,lon:153.03,d:40.6},
+  {n:'Singapore',    lat:  1.35,lon:103.82,d:42.2},
+  {n:'Kuala Lumpur', lat:  3.14,lon:101.69,d:44.1},
+  {n:'Ho Chi Minh',  lat: 10.82,lon:106.63,d:51.5},
+  {n:'Colombo',      lat:  6.93,lon: 79.84,d:53.3},
+  {n:'Madagascar',   lat:-18.91,lon: 47.54,d:54.0},
+  {n:'Bangkok',      lat: 13.76,lon:100.50,d:54.7},
+  {n:'Manila',       lat: 14.60,lon:120.98,d:57.0},
+  {n:'Hong Kong',    lat: 22.32,lon:114.17,d:63.5},
+  {n:'Johannesburg', lat:-26.20,lon: 28.05,d:64.6},
+  {n:'Kolkata',      lat: 22.57,lon: 88.36,d:65.4},
+  {n:'Dhaka',        lat: 23.81,lon: 90.41,d:66.1},
+  {n:'Cape Town',    lat:-33.93,lon: 18.42,d:67.0},
+  {n:'Mumbai',       lat: 19.08,lon: 72.88,d:67.2},
+  {n:'Taipei',       lat: 25.03,lon:121.57,d:67.3},
+  {n:'Mombasa',      lat: -4.05,lon: 39.67,d:69.6},
+  {n:'Nairobi',      lat: -1.29,lon: 36.82,d:73.4},
+  {n:'Delhi',        lat: 28.61,lon: 77.21,d:74.3},
+  {n:'Tokyo',        lat: 35.68,lon:139.69,d:82.4},
+];
+
+const CITIES_24 = [
+  {n:'Perth',        lat:-31.95,lon:115.86,d:12.1},
+  {n:'Adelaide',     lat:-34.93,lon:138.60,d:26.3},
+  {n:'Melbourne',    lat:-37.81,lon:144.96,d:30.1},
+  {n:'Sydney',       lat:-33.87,lon:151.21,d:36.3},
+  {n:'Jakarta',      lat: -6.21,lon:106.85,d:34.5},
+  {n:'Singapore',    lat:  1.35,lon:103.82,d:42.2},
+  {n:'Bangkok',      lat: 13.76,lon:100.50,d:54.7},
+  {n:'Manila',       lat: 14.60,lon:120.98,d:57.0},
+  {n:'Cape Town',    lat:-33.93,lon: 18.42,d:67.0},
+  {n:'Mumbai',       lat: 19.08,lon: 72.88,d:67.2},
+  {n:'Mombasa',      lat: -4.05,lon: 39.67,d:69.6},
+  {n:'Nairobi',      lat: -1.29,lon: 36.82,d:73.4},
+  {n:'Delhi',        lat: 28.61,lon: 77.21,d:74.3},
+  {n:'Dubai',        lat: 25.20,lon: 55.27,d:80.9},
+  {n:'Tokyo',        lat: 35.68,lon:139.69,d:82.4},
+  {n:'Beijing',      lat: 39.90,lon:116.41,d:81.1},
+  {n:'Cairo',        lat: 30.04,lon: 31.24,d:98.8},
+  {n:'Lagos',        lat:  6.52,lon:  3.38,d:103.8},
+  {n:'São Paulo',    lat:-23.55,lon:-46.63,d:110.9},
+  {n:'Buenos Aires', lat:-34.60,lon:-58.38,d:103.3},
+  {n:'Moscow',       lat: 55.76,lon: 37.62,d:112.5},
+  {n:'Istanbul',     lat: 41.01,lon: 28.98,d:107.4},
+  {n:'Rome',         lat: 41.90,lon: 12.50,d:118.0},
+  {n:'Berlin',       lat: 52.52,lon: 13.41,d:122.5},
+  {n:'Madrid',       lat: 40.42,lon: -3.70,d:128.2},
+  {n:'Paris',        lat: 48.86,lon:  2.35,d:127.5},
+  {n:'London',       lat: 51.51,lon: -0.13,d:129.9},
+  {n:'New York',     lat: 40.71,lon:-74.01,d:180.0},
+];
+
+let currentMode = '12ft';
+let geoCache = null;
+
+function project(lat,lon,scale){
+  const φ0=ANT.lat*D2R,λ0=ANT.lon*D2R,φ=lat*D2R,λ=lon*D2R;
+  let cosC=Math.sin(φ0)*Math.sin(φ)+Math.cos(φ0)*Math.cos(φ)*Math.cos(λ-λ0);
+  cosC=Math.max(-1,Math.min(1,cosC));
+  const c=Math.acos(cosC)*R2D;
+  if(c<0.001) return {x:CX,y:CY,d:0};
+  const b=Math.atan2(Math.sin(λ-λ0)*Math.cos(φ),Math.cos(φ0)*Math.sin(φ)-Math.sin(φ0)*Math.cos(φ)*Math.cos(λ-λ0));
+  const r=c*scale;
+  return {x:CX-r*Math.sin(b), y:CY-r*Math.cos(b), d:c};
+}
+
+function gc(la1,lo1,la2,lo2){
+  const f1=la1*D2R,f2=la2*D2R,dL=(lo2-lo1)*D2R;
+  return Math.acos(Math.max(-1,Math.min(1,Math.sin(f1)*Math.sin(f2)+Math.cos(f1)*Math.cos(f2)*Math.cos(dL))))*R2D;
+}
+
+function drawRings(ctx,rings,scale){
+  rings.forEach(ring=>{
+    let penDown=false;
+    for(let i=0;i<ring.length;i++){
+      const seam=i>0&&gc(ring[i-1][1],ring[i-1][0],ring[i][1],ring[i][0])>55;
+      const pt=project(ring[i][1],ring[i][0],scale);
+      if(!penDown||seam){ ctx.moveTo(pt.x,pt.y); penDown=true; }
+      else ctx.lineTo(pt.x,pt.y);
+    }
+  });
+}
+
+function draw(geo){
+  const cfg = MODES[currentMode];
+  const cities = currentMode==='12ft' ? CITIES_12 : CITIES_24;
+  const {cap, capRef, max} = cfg;
+  const scale = 315/max;
+
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#050508'; ctx.fillRect(0,0,W,H);
+
+  // clip to display circle
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,315,0,7); ctx.clip();
+
+  // grid — POV angles (degrees from straight down); multiply by 2 for surface arc to get pixel radius
+  const povGrid = max<=90 ? [10,20,30,40] : [10,20,30,40,50,60];
+  ctx.strokeStyle='rgba(50,90,110,.28)'; ctx.lineWidth=.6;
+  povGrid.forEach(pov=>{ ctx.beginPath(); ctx.arc(CX,CY,pov*2*scale,0,7); ctx.stroke(); });
+  for(let a=0;a<360;a+=30){
+    const r=(a-90)*D2R;
+    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(CX+315*Math.cos(r),CY+315*Math.sin(r)); ctx.stroke();
+  }
+
+  // faint tint on the visible disc (clean arc fill — no polygon artifacts)
+  ctx.beginPath(); ctx.arc(CX,CY,cap*scale,0,7);
+  ctx.fillStyle='rgba(30,77,90,.16)'; ctx.fill();
+
+  if(geo){
+    const allRings=[];
+    geo.features.forEach(f=>{
+      const g=f.geometry; if(!g) return;
+      if(g.type==='Polygon') allRings.push(...g.coordinates);
+      else if(g.type==='MultiPolygon') g.coordinates.forEach(p=>allRings.push(...p));
+    });
+
+    // coastlines as OUTLINES only — filling them produces projection wedges
+    // because split polygons get closed with straight edges across the map.
+    ctx.beginPath(); drawRings(ctx,allRings,scale);
+    ctx.strokeStyle='rgba(90,140,150,.32)'; ctx.lineWidth=.6; ctx.stroke();
+
+    // brighter coastlines inside the cap
+    ctx.save();
+    ctx.beginPath(); ctx.arc(CX,CY,cap*scale,0,7); ctx.clip();
+    ctx.beginPath(); drawRings(ctx,allRings,scale);
+    ctx.strokeStyle='rgba(110,225,215,.9)'; ctx.lineWidth=1.1; ctx.stroke();
+    ctx.restore();
+  }
+
+  // dark overlay outside cap
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,W,H);
+  ctx.arc(CX,CY,cap*scale,0,7,true);
+  ctx.fillStyle='rgba(5,5,8,.52)'; ctx.fill('evenodd');
+  ctx.restore();
+
+  // reference circle
+  ctx.beginPath(); ctx.arc(CX,CY,capRef*scale,0,7);
+  ctx.strokeStyle='rgba(78,205,196,.38)'; ctx.lineWidth=1.2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+
+  // main cap boundary
+  ctx.beginPath(); ctx.arc(CX,CY,cap*scale,0,7);
+  ctx.strokeStyle='#ffaa44'; ctx.lineWidth=1.8; ctx.setLineDash([7,5]); ctx.stroke(); ctx.setLineDash([]);
+
+  // POV angle labels
+  ctx.fillStyle='rgba(100,140,160,.5)'; ctx.font='10px system-ui'; ctx.textAlign='left';
+  povGrid.forEach(pov=>{ const px=pov*2*scale; if(px<310) ctx.fillText(pov+'°',CX+px+3,CY-3); });
+  // label at horizon (90°)
+  ctx.fillStyle='rgba(100,140,160,.3)'; ctx.font='9px system-ui';
+  if(90*2*scale<315) ctx.fillText('90° horizon',CX+90*2*scale+3,CY-3);
+
+  ctx.restore(); // display clip
+
+  // compass
+  ctx.fillStyle='rgba(120,140,150,.45)'; ctx.font='11px system-ui'; ctx.textAlign='center';
+  ctx.fillText('N',CX,20); ctx.fillText('S',CX,H-6);
+  ctx.textAlign='left';  ctx.fillText('← E',CX-315,CY-6);
+  ctx.textAlign='right'; ctx.fillText('W →',CX+315,CY-6);
+
+  // cities
+  cities.forEach(c=>{
+    const pt=project(c.lat,c.lon,scale);
+    if(pt.d>max+4) return;
+    const edge=Math.abs(c.d-cap)<2;
+    const inside=c.d<cap-2;
+    const color=edge?'#ff6b6b':inside?'#4ecdc4':'rgba(120,145,155,.5)';
+    ctx.beginPath(); ctx.arc(pt.x,pt.y,inside||edge?4:3,0,7);
+    ctx.fillStyle=color; ctx.fill();
+    if(inside||edge){ ctx.strokeStyle='rgba(255,255,255,.65)'; ctx.lineWidth=1; ctx.stroke(); }
+    ctx.fillStyle=edge?'#ff8888':inside?'#d8eeee':'rgba(150,165,175,.55)';
+    ctx.font=(inside||edge)?'11px system-ui':'10px system-ui';
+    ctx.textAlign=pt.x<CX?'right':'left';
+    const pov = (c.d/2).toFixed(1);
+    const label = c.d===180 ? `${c.n} (you — horizon)` : `${c.n} ${pov}°`;
+    ctx.fillText(label, pt.x+(pt.x<CX?-7:7), pt.y+4);
+  });
+
+  // antipode crosshair
+  ctx.strokeStyle='#ffaa44'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(CX,CY,5,0,7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(CX-10,CY); ctx.lineTo(CX+10,CY);
+               ctx.moveTo(CX,CY-10); ctx.lineTo(CX,CY+10); ctx.stroke();
+  ctx.fillStyle='#ffaa44'; ctx.font='11px system-ui'; ctx.textAlign='left';
+  ctx.fillText('⬇ straight down',CX+10,CY-8);
+}
+
+function setMode(mode){
+  currentMode=mode;
+  const cfg=MODES[mode];
+  document.getElementById('desc').innerHTML=cfg.desc;
+  document.getElementById('leg-main').textContent=cfg.legMain;
+  document.getElementById('leg-ref').textContent=cfg.legRef;
+  document.getElementById('btn-12').classList.toggle('active',mode==='12ft');
+  document.getElementById('btn-24').classList.toggle('active',mode==='24ft');
+  draw(geoCache);
+}
+
+async function init(){
+  setMode('12ft');
+  try{
+    const urls=[
+      'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson',
+      'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+    ];
+    for(const u of urls){ try{ const r=await fetch(u); if(r.ok){geoCache=await r.json();break;} }catch(e){} }
+  }catch(e){}
+  draw(geoCache);
+  document.getElementById('status').textContent='';
+}
+
+init();
+</script>
+</body>
+</html>

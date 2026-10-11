@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earth - Day/Night Cycle</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: #050508;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .toggle-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .toggle-btn:hover { background: rgba(255,255,255,0.2); }
+        .toggle-btn.active {
+            background: rgba(78, 205, 196, 0.3);
+            border-color: #4ecdc4;
+        }
+        
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 16px;
+            color: #fff;
+            font-size: 12px;
+            min-width: 220px;
+            backdrop-filter: blur(10px);
+        }
+        
+        #info-panel h3 {
+            color: #4ecdc4;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .info-row:last-child { border-bottom: none; margin-bottom: 0; }
+        
+        .info-label { color: rgba(255,255,255,0.6); }
+        .info-value { color: #fff; font-family: monospace; }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top-color: #4ecdc4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        #footer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255,255,255,0.4);
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="loading">
+        <div class="spinner"></div>
+        Loading day/night globe...
+    </div>
+    
+    <div id="info-panel">
+        <h3>Solar Position</h3>
+        <div class="info-row">
+            <span class="info-label">UTC Time</span>
+            <span class="info-value" id="utc-time">--:--:--</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Subsolar Lat</span>
+            <span class="info-value" id="subsolar-lat">--°</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Subsolar Lon</span>
+            <span class="info-value" id="subsolar-lon">--°</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Day of Year</span>
+            <span class="info-value" id="day-of-year">--</span>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <button class="toggle-btn" id="meridiansBtn">Show Meridians</button>
+        <button class="toggle-btn active" id="citiesBtn">City Lights</button>
+        <button class="toggle-btn" id="speedBtn">1x Speed</button>
+    </div>
+    
+    <div id="footer">Click and drag to rotate • Day/night updates in real-time</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js"></script>
+    
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            globeRadius: 5,
+            backgroundColor: 0x050508,
+            showMeridians: false,
+            showCities: true,
+            timeSpeed: 1, // 1 = real-time, 60 = 1 min/sec, 3600 = 1 hr/sec
+            speedLevels: [1, 60, 360, 3600],
+            currentSpeedIndex: 0
+        };
+
+        // ============================================
+        // DAY/NIGHT COLORS
+        // ============================================
+        const DAY_COLORS = {
+            forest: 0x3d6b3d,
+            grass: 0x6b8e4a,
+            arid: 0x9c8565,
+            tropical: 0x228b22,
+            ice: 0xe8e8f0,
+            tundra: 0xa8b498
+        };
+
+        const NIGHT_COLORS = {
+            land: 0x0a0a12,      // Very dark blue-black
+            water: 0x050508     // Even darker
+        };
+
+        // ============================================
+        // MAJOR WORLD CITIES (for night lights)
+        // [name, lat, lon, brightness (1-5 scale based on size/light pollution)]
+        // ============================================
+        const CITIES = [
+            // North America
+            ["New York", 40.71, -74.01, 5],
+            ["Los Angeles", 34.05, -118.24, 5],
+            ["Chicago", 41.88, -87.63, 4],
+            ["Houston", 29.76, -95.37, 4],
+            ["Phoenix", 33.45, -112.07, 3],
+            ["Philadelphia", 39.95, -75.17, 4],
+            ["San Francisco", 37.77, -122.42, 4],
+            ["Seattle", 47.61, -122.33, 3],
+            ["Miami", 25.76, -80.19, 4],
+            ["Dallas", 32.78, -96.80, 4],
+            ["Boston", 42.36, -71.06, 4],
+            ["Atlanta", 33.75, -84.39, 4],
+            ["Toronto", 43.65, -79.38, 4],
+            ["Mexico City", 19.43, -99.13, 5],
+            ["Vancouver", 49.28, -123.12, 3],
+            ["Montreal", 45.50, -73.57, 3],
+            
+            // South America
+            ["São Paulo", 23.55, -46.63, 5],
+            ["Buenos Aires", -34.60, -58.38, 5],
+            ["Rio de Janeiro", -22.91, -43.17, 4],
+            ["Lima", -12.05, -77.04, 4],
+            ["Bogotá", 4.71, -74.07, 4],
+            ["Santiago", -33.45, -70.67, 4],
+            ["Caracas", 10.48, -66.90, 3],
+            
+            // Europe
+            ["London", 51.51, -0.13, 5],
+            ["Paris", 48.86, 2.35, 5],
+            ["Berlin", 52.52, 13.41, 4],
+            ["Madrid", 40.42, -3.70, 4],
+            ["Rome", 41.90, 12.50, 4],
+            ["Amsterdam", 52.37, 4.90, 4],
+            ["Brussels", 50.85, 4.35, 3],
+            ["Vienna", 48.21, 16.37, 3],
+            ["Warsaw", 52.23, 21.01, 3],
+            ["Barcelona", 41.39, 2.17, 4],
+            ["Munich", 48.14, 11.58, 3],
+            ["Milan", 45.46, 9.19, 4],
+            ["Moscow", 55.76, 37.62, 5],
+            ["St Petersburg", 59.93, 30.34, 4],
+            ["Istanbul", 41.01, 28.98, 5],
+            ["Athens", 37.98, 23.73, 3],
+            ["Stockholm", 59.33, 18.07, 3],
+            ["Oslo", 59.91, 10.75, 2],
+            ["Copenhagen", 55.68, 12.57, 3],
+            ["Dublin", 53.35, -6.26, 3],
+            ["Lisbon", 38.72, -9.14, 3],
+            ["Prague", 50.08, 14.44, 3],
+            ["Budapest", 47.50, 19.04, 3],
+            ["Kyiv", 50.45, 30.52, 3],
+            
+            // Asia
+            ["Tokyo", 35.68, 139.69, 5],
+            ["Beijing", 39.90, 116.41, 5],
+            ["Shanghai", 31.23, 121.47, 5],
+            ["Hong Kong", 22.32, 114.17, 5],
+            ["Singapore", 1.35, 103.82, 5],
+            ["Seoul", 37.57, 126.98, 5],
+            ["Mumbai", 19.08, 72.88, 5],
+            ["Delhi", 28.61, 77.21, 5],
+            ["Bangkok", 13.76, 100.50, 4],
+            ["Jakarta", -6.21, 106.85, 5],
+            ["Manila", 14.60, 120.98, 4],
+            ["Taipei", 25.03, 121.57, 4],
+            ["Osaka", 34.69, 135.50, 4],
+            ["Guangzhou", 23.13, 113.26, 5],
+            ["Shenzhen", 22.54, 114.06, 5],
+            ["Kolkata", 22.57, 88.36, 4],
+            ["Chennai", 13.08, 80.27, 4],
+            ["Bangalore", 12.97, 77.59, 4],
+            ["Karachi", 24.86, 67.01, 4],
+            ["Dhaka", 23.81, 90.41, 4],
+            ["Ho Chi Minh", 10.82, 106.63, 4],
+            ["Kuala Lumpur", 3.14, 101.69, 4],
+            ["Dubai", 25.20, 55.27, 4],
+            ["Tel Aviv", 32.09, 34.78, 3],
+            ["Riyadh", 24.69, 46.72, 3],
+            ["Tehran", 35.69, 51.39, 4],
+            
+            // Africa
+            ["Cairo", 30.04, 31.24, 5],
+            ["Lagos", 6.52, 3.38, 4],
+            ["Johannesburg", -26.20, 28.05, 4],
+            ["Nairobi", -1.29, 36.82, 3],
+            ["Cape Town", -33.93, 18.42, 3],
+            ["Casablanca", 33.59, -7.62, 3],
+            ["Algiers", 36.74, 3.06, 3],
+            ["Addis Ababa", 9.03, 38.74, 3],
+            ["Kinshasa", -4.44, 15.27, 3],
+            ["Dar es Salaam", -6.79, 39.21, 2],
+            
+            // Oceania
+            ["Sydney", -33.87, 151.21, 5],
+            ["Melbourne", -37.81, 144.96, 4],
+            ["Brisbane", -27.47, 153.03, 3],
+            ["Perth", -31.95, 115.86, 3],
+            ["Auckland", -36.85, 174.76, 3],
+        ];
+
+        // ============================================
+        // SOLAR POSITION CALCULATION
+        // ============================================
+        
+        let simulatedTime = Date.now();
+        
+        function getSolarPosition() {
+            const now = new Date(simulatedTime);
+            const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+            
+            // Day of year (1-365)
+            const start = new Date(now.getUTCFullYear(), 0, 0);
+            const diff = now - start;
+            const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+            
+            // Subsolar latitude (solar declination)
+            // Varies from +23.44° (June solstice) to -23.44° (December solstice)
+            const declination = 23.44 * Math.sin((2 * Math.PI / 365) * (dayOfYear - 81));
+            
+            // Subsolar longitude
+            // At UTC noon (12:00), the sun is over 0° longitude
+            // The sun moves 15° westward per hour
+            const subsolarLon = (12 - utcHours) * 15;
+            
+            return {
+                lat: declination,
+                lon: subsolarLon,
+                utcTime: now.toUTCString().slice(17, 25),
+                dayOfYear: dayOfYear
+            };
+        }
+
+        // Check if a point is in daylight
+        function isInDaylight(lat, lon, solarPos) {
+            // Convert to radians
+            const lat1 = solarPos.lat * Math.PI / 180;
+            const lon1 = solarPos.lon * Math.PI / 180;
+            const lat2 = lat * Math.PI / 180;
+            const lon2 = lon * Math.PI / 180;
+            
+            // Angular distance from subsolar point (using spherical law of cosines)
+            const cosAngle = Math.sin(lat1) * Math.sin(lat2) + 
+                           Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+            const angle = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+            
+            // Return a value from 0 (full night) to 1 (full day)
+            // with civil twilight transition (6°)
+            if (angle < 84) return 1;           // Full daylight
+            if (angle > 96) return 0;           // Full night
+            return 1 - (angle - 84) / 12;       // Twilight gradient
+        }
+
+        // ============================================
+        // SCENE SETUP
+        // ============================================
+        let scene, camera, renderer, controls;
+        let globe, meridiansGroup, cityLightsGroup;
+        let countryMeshes = []; // Store for updating colors
+        let cityLights = [];    // Store city light objects
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(CONFIG.backgroundColor);
+            
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 14;
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.rotateSpeed = 0.5;
+            controls.enablePan = false;
+            
+            // Ambient light (low for night effect)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+            
+            // Sun light (directional, will be positioned based on solar position)
+            const sunLight = new THREE.DirectionalLight(0xffffee, 1.0);
+            sunLight.position.set(10, 5, 10);
+            scene.add(sunLight);
+            window.sunLight = sunLight;
+            
+            // Containers
+            globe = new THREE.Group();
+            meridiansGroup = new THREE.Group();
+            meridiansGroup.visible = CONFIG.showMeridians;
+            cityLightsGroup = new THREE.Group();
+            
+            scene.add(globe);
+            scene.add(meridiansGroup);
+            scene.add(cityLightsGroup);
+            
+            window.addEventListener('resize', onWindowResize);
+            
+            // Controls
+            document.getElementById('meridiansBtn').addEventListener('click', toggleMeridians);
+            document.getElementById('citiesBtn').addEventListener('click', toggleCities);
+            document.getElementById('speedBtn').addEventListener('click', cycleSpeed);
+            
+            // Create meridian lines
+            createMeridians();
+            
+            // Create city lights
+            createCityLights();
+        }
+
+        function toggleMeridians() {
+            CONFIG.showMeridians = !CONFIG.showMeridians;
+            meridiansGroup.visible = CONFIG.showMeridians;
+            document.getElementById('meridiansBtn').classList.toggle('active', CONFIG.showMeridians);
+        }
+
+        function toggleCities() {
+            CONFIG.showCities = !CONFIG.showCities;
+            cityLightsGroup.visible = CONFIG.showCities;
+            document.getElementById('citiesBtn').classList.toggle('active', CONFIG.showCities);
+        }
+
+        function cycleSpeed() {
+            CONFIG.currentSpeedIndex = (CONFIG.currentSpeedIndex + 1) % CONFIG.speedLevels.length;
+            CONFIG.timeSpeed = CONFIG.speedLevels[CONFIG.currentSpeedIndex];
+            const labels = ['1x Speed', '1 min/sec', '6 min/sec', '1 hr/sec'];
+            document.getElementById('speedBtn').textContent = labels[CONFIG.currentSpeedIndex];
+            document.getElementById('speedBtn').classList.toggle('active', CONFIG.currentSpeedIndex > 0);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ============================================
+        // MERIDIAN LINES
+        // ============================================
+        
+        function createMeridians() {
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0xffaa00, 
+                transparent: true, 
+                opacity: 0.6 
+            });
+            
+            const dateMaterial = new THREE.LineBasicMaterial({ 
+                color: 0xff4444, 
+                transparent: true, 
+                opacity: 0.6 
+            });
+            
+            // Prime Meridian (0°)
+            const primePoints = [];
+            for (let lat = -90; lat <= 90; lat += 2) {
+                primePoints.push(latLongToVector3(lat, 0, CONFIG.globeRadius + 0.02));
+            }
+            const primeGeom = new THREE.BufferGeometry().setFromPoints(primePoints);
+            const primeLine = new THREE.Line(primeGeom, material);
+            meridiansGroup.add(primeLine);
+            
+            // International Date Line (180°)
+            const datePoints = [];
+            for (let lat = -90; lat <= 90; lat += 2) {
+                datePoints.push(latLongToVector3(lat, 180, CONFIG.globeRadius + 0.02));
+            }
+            const dateGeom = new THREE.BufferGeometry().setFromPoints(datePoints);
+            const dateLine = new THREE.Line(dateGeom, dateMaterial);
+            meridiansGroup.add(dateLine);
+            
+            // Additional longitude lines every 30°
+            const minorMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x4488aa, 
+                transparent: true, 
+                opacity: 0.3 
+            });
+            
+            for (let lon = -150; lon <= 150; lon += 30) {
+                if (lon === 0 || lon === 180 || lon === -180) continue;
+                const points = [];
+                for (let lat = -90; lat <= 90; lat += 5) {
+                    points.push(latLongToVector3(lat, lon, CONFIG.globeRadius + 0.015));
+                }
+                const geom = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geom, minorMaterial);
+                meridiansGroup.add(line);
+            }
+            
+            // Equator
+            const equatorPoints = [];
+            for (let lon = -180; lon <= 180; lon += 2) {
+                equatorPoints.push(latLongToVector3(0, lon, CONFIG.globeRadius + 0.015));
+            }
+            const equatorGeom = new THREE.BufferGeometry().setFromPoints(equatorPoints);
+            const equatorLine = new THREE.Line(equatorGeom, minorMaterial);
+            meridiansGroup.add(equatorLine);
+        }
+
+        // ============================================
+        // CITY LIGHTS
+        // ============================================
+        
+        function createCityLights() {
+            CITIES.forEach(city => {
+                const [name, lat, lon, brightness] = city;
+                
+                // Create a small sphere for each city
+                const size = 0.015 + (brightness - 1) * 0.008;
+                const geometry = new THREE.SphereGeometry(size, 8, 8);
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0xffdd88,
+                    transparent: true,
+                    opacity: 0
+                });
+                
+                const pos = latLongToVector3(lat, lon, CONFIG.globeRadius + 0.01);
+                const light = new THREE.Mesh(geometry, material);
+                light.position.copy(pos);
+                
+                cityLightsGroup.add(light);
+                cityLights.push({
+                    mesh: light,
+                    lat: lat,
+                    lon: lon,
+                    brightness: brightness
+                });
+            });
+        }
+
+        // ============================================
+        // COORDINATE CONVERSION
+        // ============================================
+        
+        function latLongToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            
+            return new THREE.Vector3(
+                -radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.cos(phi),
+                radius * Math.sin(phi) * Math.sin(theta)
+            );
+        }
+
+        // ============================================
+        // TERRAIN COLOR (simplified for day/night)
+        // ============================================
+        
+        function getTerrainColor(lat, lon) {
+            const absLat = Math.abs(lat);
+            
+            if (absLat > 65) return DAY_COLORS.ice;
+            if (absLat > 55) return DAY_COLORS.tundra;
+            
+            // Arid regions
+            if ((lat > 15 && lat < 35 && lon > -20 && lon < 60) ||
+                (lat > -35 && lat < -20 && lon > 115 && lon < 145)) {
+                return DAY_COLORS.arid;
+            }
+            
+            if (absLat < 20) return DAY_COLORS.tropical;
+            if (absLat < 40) return DAY_COLORS.grass;
+            
+            return DAY_COLORS.forest;
+        }
+
+        // Blend between day and night colors
+        function blendColors(dayColor, nightColor, dayAmount) {
+            const day = new THREE.Color(dayColor);
+            const night = new THREE.Color(nightColor);
+            return day.lerp(night, 1 - dayAmount);
+        }
+
+        // ============================================
+        // GEOMETRY CREATION
+        // ============================================
+        
+        const INTERIOR_COLOR = 0x1a1a1a; // Dark grey for inside of sphere
+        
+        function createCountryMesh(coordinates, properties) {
+            const meshes = [];
+            
+            coordinates.forEach(ring => {
+                if (!ring || ring.length < 3) return;
+                
+                let centerLat = 0, centerLon = 0;
+                ring.forEach(coord => {
+                    centerLon += coord[0];
+                    centerLat += coord[1];
+                });
+                centerLat /= ring.length;
+                centerLon /= ring.length;
+                
+                const dayColor = getTerrainColor(centerLat, centerLon);
+                
+                const flatPoints = [];
+                ring.forEach(coord => flatPoints.push(coord[0], coord[1]));
+                
+                let triangleIndices;
+                try {
+                    triangleIndices = earcut(flatPoints);
+                } catch (e) { return; }
+                
+                if (triangleIndices.length < 3) return;
+                
+                const vertices = [];
+                ring.forEach(coord => {
+                    const v = latLongToVector3(coord[1], coord[0], CONFIG.globeRadius);
+                    vertices.push(v.x, v.y, v.z);
+                });
+                
+                // FRONT FACE (exterior) - day/night colors
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geometry.setIndex(triangleIndices);
+                geometry.computeVertexNormals();
+                
+                const frontMaterial = new THREE.MeshPhongMaterial({
+                    color: dayColor,
+                    side: THREE.FrontSide,
+                    flatShading: false,
+                    shininess: 5
+                });
+                
+                const frontMesh = new THREE.Mesh(geometry, frontMaterial);
+                globe.add(frontMesh);
+                
+                // BACK FACE (interior) - always dark grey
+                const backGeometry = geometry.clone();
+                const backMaterial = new THREE.MeshBasicMaterial({
+                    color: INTERIOR_COLOR,
+                    side: THREE.BackSide
+                });
+                
+                const backMesh = new THREE.Mesh(backGeometry, backMaterial);
+                globe.add(backMesh);
+                
+                meshes.push({
+                    mesh: frontMesh,
+                    lat: centerLat,
+                    lon: centerLon,
+                    dayColor: dayColor
+                });
+            });
+            
+            return meshes;
+        }
+
+        // ============================================
+        // UPDATE DAY/NIGHT
+        // ============================================
+        
+        function updateDayNight() {
+            const solarPos = getSolarPosition();
+            
+            // Update info panel
+            document.getElementById('utc-time').textContent = solarPos.utcTime;
+            document.getElementById('subsolar-lat').textContent = solarPos.lat.toFixed(2) + '°';
+            document.getElementById('subsolar-lon').textContent = solarPos.lon.toFixed(2) + '°';
+            document.getElementById('day-of-year').textContent = solarPos.dayOfYear;
+            
+            // Update sun light position
+            const sunPos = latLongToVector3(solarPos.lat, solarPos.lon, 20);
+            window.sunLight.position.copy(sunPos);
+            
+            // Update country colors
+            countryMeshes.forEach(item => {
+                const dayAmount = isInDaylight(item.lat, item.lon, solarPos);
+                const color = blendColors(item.dayColor, NIGHT_COLORS.land, dayAmount);
+                item.mesh.material.color = color;
+                item.mesh.material.emissive = dayAmount < 0.3 ? new THREE.Color(0x050510) : new THREE.Color(0x000000);
+            });
+            
+            // Update city lights (visible only at night)
+            cityLights.forEach(city => {
+                const dayAmount = isInDaylight(city.lat, city.lon, solarPos);
+                const nightAmount = 1 - dayAmount;
+                
+                // City lights fade in as night falls
+                const intensity = Math.pow(nightAmount, 2) * (city.brightness / 5);
+                city.mesh.material.opacity = intensity * 0.9;
+                
+                // Slight color variation
+                if (nightAmount > 0.5) {
+                    city.mesh.material.color.setHex(0xffdd88);
+                }
+            });
+            
+            // Advance simulated time
+            simulatedTime += 16 * CONFIG.timeSpeed; // ~60fps, adjusted by speed
+        }
+
+        // ============================================
+        // GEOJSON LOADING
+        // ============================================
+        
+        async function loadGeoJSON() {
+            const sources = [
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson',
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson'
+            ];
+            
+            for (const url of sources) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) return await response.json();
+                } catch (e) {
+                    console.warn('Failed:', url);
+                }
+            }
+            throw new Error('All sources failed');
+        }
+
+        function processGeoJSON(geojson) {
+            geojson.features.forEach(feature => {
+                const geometry = feature.geometry;
+                const properties = feature.properties || {};
+                
+                if (geometry.type === 'Polygon') {
+                    const meshes = createCountryMesh(geometry.coordinates, properties);
+                    countryMeshes.push(...meshes);
+                } else if (geometry.type === 'MultiPolygon') {
+                    geometry.coordinates.forEach(polygon => {
+                        const meshes = createCountryMesh(polygon, properties);
+                        countryMeshes.push(...meshes);
+                    });
+                }
+            });
+        }
+
+        // ============================================
+        // ANIMATION
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateDayNight();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        async function init() {
+            initScene();
+            
+            try {
+                const geojson = await loadGeoJSON();
+                processGeoJSON(geojson);
+                document.getElementById('loading').style.display = 'none';
+                animate();
+            } catch (error) {
+                console.error('Init failed:', error);
+                document.getElementById('loading').innerHTML = 'Failed to load data';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earth - NYC Antipode View</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: #050508;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top-color: #4ecdc4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+        }
+        
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,100,100,0.4);
+        }
+        
+        #crosshair::before {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+        }
+        
+        #crosshair::after {
+            width: 100%;
+            height: 1px;
+            top: 50%;
+        }
+        
+        #controls-dropdown {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+        }
+
+        #controls-toggle {
+            background: linear-gradient(135deg, rgba(20,20,40,0.9) 0%, rgba(40,40,80,0.9) 100%);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.7);
+            padding: 7px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+            backdrop-filter: blur(10px);
+            transition: border-color 0.2s;
+        }
+
+        #controls-toggle:hover {
+            border-color: rgba(255,255,255,0.35);
+            color: #fff;
+        }
+
+        #controls-panel {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 0;
+            background: rgba(10,10,25,0.92);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 12px 16px;
+            backdrop-filter: blur(12px);
+            white-space: nowrap;
+        }
+
+        #controls-panel.open { display: block; }
+
+        #controls-panel table { border-collapse: collapse; }
+
+        #controls-panel td {
+            color: rgba(255,255,255,0.75);
+            font-size: 12px;
+            padding: 3px 0;
+        }
+
+        #controls-panel td:first-child {
+            color: #4ecdc4;
+            font-weight: 600;
+            padding-right: 16px;
+        }
+        
+        .nav-btn {
+            position: absolute;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(20,20,40,0.9) 0%, rgba(40,40,80,0.9) 100%);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+            border-color: rgba(255,255,255,0.3);
+        }
+        
+        #home-btn {
+            top: 20px;
+            background: linear-gradient(135deg, rgba(78,205,196,0.2) 0%, rgba(40,80,80,0.9) 100%);
+            border-color: rgba(78,205,196,0.4);
+        }
+        
+        #home-btn:hover {
+            background: linear-gradient(135deg, rgba(78,205,196,0.4) 0%, rgba(60,120,120,0.9) 100%);
+            border-color: #4ecdc4;
+            color: #4ecdc4;
+        }
+        
+        #center-btn {
+            top: 70px;
+            background: linear-gradient(135deg, rgba(255,170,68,0.2) 0%, rgba(80,60,40,0.9) 100%);
+            border-color: rgba(255,170,68,0.4);
+        }
+        
+        #center-btn:hover {
+            background: linear-gradient(135deg, rgba(255,170,68,0.4) 0%, rgba(120,90,60,0.9) 100%);
+            border-color: #ffaa44;
+            color: #ffaa44;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="loading">
+        <div class="spinner"></div>
+        Loading view...
+    </div>
+    
+    
+    <div id="crosshair"></div>
+    <button id="home-btn" class="nav-btn">⌂ NYC Surface</button>
+    <button id="center-btn" class="nav-btn">◎ Globe Center</button>
+    <div id="controls-dropdown">
+        <button id="controls-toggle">? Controls</button>
+        <div id="controls-panel">
+            <table>
+                <tr><td>Drag</td><td>Look around</td></tr>
+                <tr><td>Space</td><td>Fly forward</td></tr>
+                <tr><td>Shift+Space</td><td>Fly backward</td></tr>
+                <tr><td>W / S</td><td>Pitch up / down</td></tr>
+                <tr><td>A / D</td><td>Yaw left / right</td></tr>
+                <tr><td>Q / E</td><td>Roll</td></tr>
+                <tr><td>Click</td><td>Step forward</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js"></script>
+    
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        // SCALE FACTOR: 500x (can increase to ~5000x max safely)
+        const SCALE = 5000;
+        
+        const CONFIG = {
+            globeRadius: 5 * SCALE,  // Base 5 × scale
+            backgroundColor: 0x000008,  // Near-black for starry sky
+            oceanColor: 0x333333,        // Grey ocean, very transparent
+            
+            // NYC coordinates
+            nycLat: 40.71,
+            nycLon: -74.01,
+            
+            // Antipode (directly opposite NYC on Earth)
+            antipodeLat: -40.71,
+            antipodeLon: 105.99,  // 180 - 74.01
+            
+            // Day/night
+            timeSpeed: 360,  // 6 min per second for visible movement
+        };
+
+        // Day colors
+        const DAY_COLORS = {
+            forest: 0x3d6b3d,
+            grass: 0x6b8e4a,
+            arid: 0x9c8565,
+            tropical: 0x228b22,
+            ice: 0xe8e8f0,
+            tundra: 0xa8b498
+        };
+        
+        const NIGHT_COLOR = 0x0a0a12;
+        const INTERIOR_COLOR = 0x1a1a1a;
+        
+        // Expanded cities for realistic night lights - [name, lat, lon, brightness 1-5]
+        const CITIES = [
+            // ASIA - Dense clusters
+            ["Tokyo", 35.68, 139.69, 5], ["Yokohama", 35.44, 139.64, 4], ["Osaka", 34.69, 135.50, 5],
+            ["Nagoya", 35.18, 136.91, 4], ["Sapporo", 43.06, 141.35, 3], ["Fukuoka", 33.59, 130.40, 3],
+            ["Kyoto", 35.01, 135.77, 3], ["Kobe", 34.69, 135.20, 3],
+            ["Beijing", 39.90, 116.41, 5], ["Shanghai", 31.23, 121.47, 5], ["Guangzhou", 23.13, 113.26, 5],
+            ["Shenzhen", 22.54, 114.06, 5], ["Chengdu", 30.57, 104.07, 4], ["Chongqing", 29.56, 106.55, 4],
+            ["Tianjin", 39.14, 117.18, 4], ["Wuhan", 30.58, 114.27, 4], ["Xi'an", 34.27, 108.95, 4],
+            ["Hangzhou", 30.25, 120.17, 4], ["Nanjing", 32.06, 118.80, 4], ["Suzhou", 31.30, 120.62, 3],
+            ["Harbin", 45.75, 126.65, 3], ["Shenyang", 41.80, 123.43, 3], ["Dalian", 38.91, 121.60, 3],
+            ["Qingdao", 36.07, 120.38, 3], ["Zhengzhou", 34.75, 113.62, 3], ["Changsha", 28.23, 112.94, 3],
+            ["Kunming", 25.04, 102.71, 3], ["Xiamen", 24.48, 118.09, 3], ["Fuzhou", 26.07, 119.30, 3],
+            ["Hong Kong", 22.32, 114.17, 5], ["Macau", 22.20, 113.55, 3],
+            ["Seoul", 37.57, 126.98, 5], ["Busan", 35.18, 129.08, 4], ["Incheon", 37.46, 126.71, 3],
+            ["Daegu", 35.87, 128.60, 3],
+            ["Taipei", 25.03, 121.57, 4], ["Kaohsiung", 22.62, 120.31, 3],
+            ["Mumbai", 19.08, 72.88, 5], ["Delhi", 28.61, 77.21, 5], ["Bangalore", 12.97, 77.59, 5],
+            ["Hyderabad", 17.39, 78.49, 4], ["Chennai", 13.08, 80.27, 4], ["Kolkata", 22.57, 88.36, 5],
+            ["Ahmedabad", 23.02, 72.57, 4], ["Pune", 18.52, 73.86, 4], ["Surat", 21.17, 72.83, 3],
+            ["Jaipur", 26.92, 75.79, 3], ["Lucknow", 26.85, 80.95, 3], ["Kanpur", 26.45, 80.35, 3],
+            ["Nagpur", 21.15, 79.09, 3], ["Indore", 22.72, 75.86, 3], ["Patna", 25.59, 85.14, 3],
+            ["Karachi", 24.86, 67.01, 5], ["Lahore", 31.55, 74.34, 4], ["Islamabad", 33.69, 73.06, 3],
+            ["Dhaka", 23.81, 90.41, 5], ["Chittagong", 22.36, 91.78, 3],
+            ["Bangkok", 13.76, 100.50, 5], ["Chiang Mai", 18.79, 98.98, 2],
+            ["Jakarta", -6.21, 106.85, 5], ["Surabaya", -7.25, 112.75, 4], ["Bandung", -6.91, 107.61, 3],
+            ["Medan", 3.59, 98.67, 3], ["Semarang", -6.97, 110.42, 3],
+            ["Singapore", 1.35, 103.82, 5],
+            ["Kuala Lumpur", 3.14, 101.69, 4], ["Penang", 5.42, 100.33, 3], ["Johor Bahru", 1.49, 103.74, 3],
+            ["Manila", 14.60, 120.98, 5], ["Cebu", 10.32, 123.89, 3], ["Davao", 7.07, 125.61, 2],
+            ["Ho Chi Minh", 10.82, 106.63, 5], ["Hanoi", 21.03, 105.85, 4], ["Da Nang", 16.05, 108.22, 2],
+            // MIDDLE EAST
+            ["Dubai", 25.20, 55.27, 5], ["Abu Dhabi", 24.45, 54.37, 4], ["Sharjah", 25.36, 55.39, 3],
+            ["Riyadh", 24.69, 46.72, 4], ["Jeddah", 21.49, 39.19, 4], ["Mecca", 21.43, 39.83, 3],
+            ["Doha", 25.29, 51.53, 4], ["Kuwait City", 29.38, 47.99, 3], ["Manama", 26.23, 50.59, 3],
+            ["Tehran", 35.69, 51.39, 5], ["Isfahan", 32.65, 51.68, 3], ["Mashhad", 36.30, 59.60, 3],
+            ["Baghdad", 33.31, 44.37, 4], ["Basra", 30.51, 47.81, 2],
+            ["Tel Aviv", 32.09, 34.78, 4], ["Jerusalem", 31.77, 35.23, 3], ["Haifa", 32.79, 34.99, 2],
+            ["Amman", 31.95, 35.93, 3], ["Beirut", 33.89, 35.50, 3], ["Damascus", 33.51, 36.29, 3],
+            // EUROPE
+            ["London", 51.51, -0.13, 5], ["Birmingham", 52.49, -1.90, 3], ["Manchester", 53.48, -2.24, 3],
+            ["Liverpool", 53.41, -2.98, 2], ["Leeds", 53.80, -1.55, 2], ["Glasgow", 55.86, -4.25, 3],
+            ["Edinburgh", 55.95, -3.19, 2],
+            ["Paris", 48.86, 2.35, 5], ["Lyon", 45.76, 4.84, 3], ["Marseille", 43.30, 5.37, 3],
+            ["Toulouse", 43.60, 1.44, 2], ["Nice", 43.71, 7.26, 2], ["Bordeaux", 44.84, -0.58, 2],
+            ["Berlin", 52.52, 13.41, 5], ["Hamburg", 53.55, 9.99, 4], ["Munich", 48.14, 11.58, 4],
+            ["Cologne", 50.94, 6.96, 3], ["Frankfurt", 50.11, 8.68, 4], ["Stuttgart", 48.78, 9.18, 3],
+            ["Dusseldorf", 51.23, 6.78, 3], ["Leipzig", 51.34, 12.38, 2], ["Dresden", 51.05, 13.74, 2],
+            ["Madrid", 40.42, -3.70, 5], ["Barcelona", 41.39, 2.17, 4], ["Valencia", 39.47, -0.38, 3],
+            ["Seville", 37.39, -5.98, 3], ["Bilbao", 43.26, -2.93, 2], ["Malaga", 36.72, -4.42, 2],
+            ["Rome", 41.90, 12.50, 5], ["Milan", 45.46, 9.19, 5], ["Naples", 40.85, 14.27, 4],
+            ["Turin", 45.07, 7.69, 3], ["Florence", 43.77, 11.25, 3], ["Venice", 45.44, 12.32, 2],
+            ["Bologna", 44.49, 11.34, 2], ["Genoa", 44.41, 8.93, 2],
+            ["Amsterdam", 52.37, 4.90, 4], ["Rotterdam", 51.92, 4.48, 3], ["The Hague", 52.08, 4.31, 2],
+            ["Brussels", 50.85, 4.35, 4], ["Antwerp", 51.22, 4.40, 3],
+            ["Vienna", 48.21, 16.37, 4], ["Zurich", 47.38, 8.54, 3], ["Geneva", 46.20, 6.14, 2],
+            ["Warsaw", 52.23, 21.01, 4], ["Krakow", 50.06, 19.94, 3], ["Gdansk", 54.35, 18.65, 2],
+            ["Prague", 50.08, 14.44, 4], ["Budapest", 47.50, 19.04, 4],
+            ["Stockholm", 59.33, 18.07, 4], ["Gothenburg", 57.71, 11.97, 2],
+            ["Copenhagen", 55.68, 12.57, 4], ["Oslo", 59.91, 10.75, 3], ["Helsinki", 60.17, 24.94, 3],
+            ["Lisbon", 38.72, -9.14, 4], ["Porto", 41.16, -8.63, 2],
+            ["Athens", 37.98, 23.73, 4], ["Thessaloniki", 40.64, 22.94, 2],
+            ["Dublin", 53.35, -6.26, 3], ["Belfast", 54.60, -5.93, 2],
+            ["Moscow", 55.76, 37.62, 5], ["St Petersburg", 59.93, 30.34, 5],
+            ["Kyiv", 50.45, 30.52, 4], ["Kharkiv", 49.99, 36.23, 3], ["Odesa", 46.48, 30.74, 3],
+            ["Istanbul", 41.01, 28.98, 5], ["Ankara", 39.93, 32.86, 4], ["Izmir", 38.42, 27.14, 3],
+            ["Bucharest", 44.43, 26.10, 4], ["Sofia", 42.70, 23.32, 3], ["Belgrade", 44.82, 20.46, 3],
+            // AFRICA
+            ["Cairo", 30.04, 31.24, 5], ["Alexandria", 31.20, 29.92, 4], ["Giza", 30.01, 31.21, 3],
+            ["Lagos", 6.52, 3.38, 5], ["Kano", 12.00, 8.52, 3], ["Ibadan", 7.38, 3.90, 3],
+            ["Johannesburg", -26.20, 28.05, 5], ["Cape Town", -33.93, 18.42, 4], ["Durban", -29.86, 31.02, 3],
+            ["Pretoria", -25.75, 28.19, 3], ["Port Elizabeth", -33.96, 25.60, 2],
+            ["Nairobi", -1.29, 36.82, 4], ["Mombasa", -4.05, 39.67, 2],
+            ["Addis Ababa", 9.03, 38.74, 4], ["Dar es Salaam", -6.79, 39.21, 3],
+            ["Kinshasa", -4.44, 15.27, 4], ["Luanda", -8.84, 13.23, 3],
+            ["Casablanca", 33.59, -7.62, 4], ["Rabat", 34.02, -6.83, 2], ["Marrakech", 31.63, -8.01, 2],
+            ["Algiers", 36.74, 3.06, 4], ["Tunis", 36.81, 10.17, 3], ["Tripoli", 32.90, 13.19, 2],
+            ["Accra", 5.56, -0.20, 3], ["Dakar", 14.69, -17.44, 3], ["Abidjan", 5.32, -4.00, 3],
+            // OCEANIA
+            ["Sydney", -33.87, 151.21, 5], ["Melbourne", -37.81, 144.96, 5], ["Brisbane", -27.47, 153.03, 4],
+            ["Perth", -31.95, 115.86, 4], ["Adelaide", -34.93, 138.60, 3], ["Gold Coast", -28.02, 153.43, 2],
+            ["Canberra", -35.28, 149.13, 2], ["Newcastle", -32.93, 151.78, 2],
+            ["Auckland", -36.85, 174.76, 4], ["Wellington", -41.29, 174.78, 2], ["Christchurch", -43.53, 172.64, 2],
+            // SOUTH AMERICA (excluded from NA transparency)
+            ["São Paulo", -23.55, -46.63, 5], ["Rio de Janeiro", -22.91, -43.17, 5],
+            ["Brasilia", -15.79, -47.88, 3], ["Salvador", -12.97, -38.50, 3], ["Fortaleza", -3.72, -38.54, 3],
+            ["Belo Horizonte", -19.92, -43.94, 4], ["Curitiba", -25.43, -49.27, 3], ["Recife", -8.05, -34.88, 3],
+            ["Porto Alegre", -30.03, -51.23, 3], ["Manaus", -3.12, -60.02, 2],
+            ["Buenos Aires", -34.60, -58.38, 5], ["Córdoba", -31.42, -64.18, 3], ["Rosario", -32.95, -60.65, 2],
+            ["Mendoza", -32.89, -68.83, 2],
+            ["Lima", -12.05, -77.04, 5], ["Arequipa", -16.40, -71.54, 2],
+            ["Bogotá", 4.71, -74.07, 4], ["Medellín", 6.25, -75.56, 3], ["Cali", 3.45, -76.53, 3],
+            ["Santiago", -33.45, -70.67, 5], ["Valparaíso", -33.05, -71.62, 2],
+            ["Caracas", 10.48, -66.90, 4], ["Maracaibo", 10.64, -71.63, 2],
+            ["Quito", -0.18, -78.47, 3], ["Guayaquil", -2.17, -79.90, 3],
+            ["Montevideo", -34.90, -56.19, 3], ["Asunción", -25.26, -57.58, 2],
+            ["La Paz", -16.50, -68.15, 2], ["Santa Cruz", -17.78, -63.18, 2],
+            // NORTH AMERICA
+            ["New York", 40.71, -74.01, 5], ["Los Angeles", 34.05, -118.24, 5],
+            ["Chicago", 41.88, -87.63, 5], ["Houston", 29.76, -95.37, 4],
+            ["Phoenix", 33.45, -112.07, 4], ["Philadelphia", 39.95, -75.17, 4],
+            ["San Antonio", 29.42, -98.49, 3], ["San Diego", 32.72, -117.16, 4],
+            ["Dallas", 32.78, -96.80, 4], ["San Jose", 37.34, -121.89, 4],
+            ["Austin", 30.27, -97.74, 3], ["San Francisco", 37.77, -122.42, 5],
+            ["Seattle", 47.61, -122.33, 4], ["Denver", 39.74, -104.99, 4],
+            ["Boston", 42.36, -71.06, 4], ["Atlanta", 33.75, -84.39, 4],
+            ["Miami", 25.76, -80.19, 5], ["Minneapolis", 44.98, -93.27, 3],
+            ["Detroit", 42.33, -83.05, 4], ["Portland", 45.52, -122.68, 3],
+            ["Las Vegas", 36.17, -115.14, 4], ["Baltimore", 39.29, -76.61, 3],
+            ["Washington DC", 38.91, -77.04, 5], ["Nashville", 36.16, -86.78, 3],
+            ["Charlotte", 35.23, -80.84, 3], ["Indianapolis", 39.77, -86.16, 3],
+            ["Orlando", 28.54, -81.38, 3], ["Tampa", 27.95, -82.46, 3],
+            ["Pittsburgh", 40.44, -80.00, 3], ["Cleveland", 41.50, -81.69, 3],
+            ["New Orleans", 29.95, -90.07, 3], ["St. Louis", 38.63, -90.20, 3],
+            ["Toronto", 43.65, -79.38, 5], ["Montreal", 45.50, -73.57, 4],
+            ["Vancouver", 49.28, -123.12, 4], ["Calgary", 51.05, -114.07, 3],
+            ["Edmonton", 53.55, -113.49, 3], ["Ottawa", 45.42, -75.70, 3],
+            ["Mexico City", 19.43, -99.13, 5], ["Guadalajara", 20.67, -103.35, 4],
+            ["Monterrey", 25.67, -100.31, 4], ["Tijuana", 32.51, -117.02, 3],
+            ["Puebla", 19.04, -98.21, 3], ["León", 21.13, -101.67, 3],
+        ];
+
+        // ============================================
+        // SCENE SETUP
+        // ============================================
+        let scene, camera, renderer;
+        let globe;
+        let countryMeshes = [];  // For day/night updates
+        let cityLights = [];     // City light objects
+        let simulatedTime = Date.now();
+        
+        // Look-around controls - world-axis fixed (flight-sim style)
+        // We track the look direction as a 3D vector
+        let lookDirection = null;  // Will be initialized in initScene
+        let upVector = null;       // Camera's up direction
+        let isMouseDown = false;   // Is mouse button currently held
+        let isDragging = false;     // Has mouse moved while held
+        let wasDragging = false;    // Track if we were just dragging
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        const LOOK_SENSITIVITY = 0.004;
+        const KEY_SENSITIVITY = 0.03;
+        
+        // Track pressed keys for smooth movement
+        const keysPressed = {};
+        
+        // Fixed vectors for current position's tangent plane
+        let surfaceNormal;      // Points away from Earth center (our "up")
+        let tangentNorth;       // Points toward north along the tangent plane
+        let tangentEast;        // Points east along the tangent plane
+        
+        // Home position (NYC)
+        let homePosition = null;
+        let homeLookDirection = null;
+        let homeUpVector = null;
+        
+        // Movement
+        const MOVE_SPEED = 0.3;
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(CONFIG.backgroundColor);
+            
+            // Camera positioned at NYC, looking toward center/antipode
+            // Natural FOV (~60°) - minimal distortion, mimics human vision
+            // Objects only change appearance when you move position, not when you look around
+            camera = new THREE.PerspectiveCamera(
+                60,
+                window.innerWidth / window.innerHeight,
+                1.0,  // Increased near plane for depth precision at scale
+                CONFIG.globeRadius * 50  // Far plane scales with globe
+            );
+            
+            // Position camera exactly ON the surface at NYC (within the tangent plane)
+            const nycPos = latLongToVector3(CONFIG.nycLat, CONFIG.nycLon, CONFIG.globeRadius);
+            camera.position.copy(nycPos);
+            
+            // Calculate tangent plane basis vectors at NYC
+            // Surface normal points away from Earth center (our "up" when standing on surface)
+            surfaceNormal = nycPos.clone().normalize();
+            
+            // World up (toward north pole)
+            const worldUp = new THREE.Vector3(0, 1, 0);
+            
+            // Tangent east = worldUp × surfaceNormal (pointing east along surface)
+            tangentEast = new THREE.Vector3().crossVectors(worldUp, surfaceNormal).normalize();
+            
+            // Tangent north = surfaceNormal × tangentEast (pointing north along surface)
+            tangentNorth = new THREE.Vector3().crossVectors(surfaceNormal, tangentEast).normalize();
+            
+            // Initial look direction: toward the antipode (through center of Earth)
+            const antipodePos = latLongToVector3(CONFIG.antipodeLat, CONFIG.antipodeLon, CONFIG.globeRadius);
+            lookDirection = antipodePos.clone().sub(camera.position).normalize();
+            
+            // Initial up vector: world up projected to be perpendicular to look direction
+            const worldY = new THREE.Vector3(0, 1, 0);
+            const right = new THREE.Vector3().crossVectors(lookDirection, worldY).normalize();
+            upVector = new THREE.Vector3().crossVectors(right, lookDirection).normalize();
+            
+            // Apply initial look
+            updateCameraLook();
+            
+            // Save home position
+            homePosition = camera.position.clone();
+            homeLookDirection = lookDirection.clone();
+            homeUpVector = upVector.clone();
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Mouse controls for looking around
+            renderer.domElement.addEventListener('mousedown', onMouseDown);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('mouseup', onMouseUp);
+            renderer.domElement.addEventListener('mouseleave', onMouseUp);
+            
+            // Keyboard controls
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+            
+            // Click to move toward crosshairs
+            renderer.domElement.addEventListener('click', onCanvasClick);
+            
+            // Return to NYC button
+            document.getElementById('home-btn').addEventListener('click', returnToNYC);
+            
+            // Center view button
+            document.getElementById('center-btn').addEventListener('click', goToCenter);
+
+            // Controls dropdown
+            const toggleBtn = document.getElementById('controls-toggle');
+            const panel = document.getElementById('controls-panel');
+            toggleBtn.addEventListener('click', () => panel.classList.toggle('open'));
+            
+            // Lighting (from nyc-view.html)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const light1 = new THREE.DirectionalLight(0xffffff, 0.6);
+            light1.position.set(5, 5, 5);
+            scene.add(light1);
+
+            const light2 = new THREE.DirectionalLight(0x88aaff, 0.3);
+            light2.position.set(-5, -5, -5);
+            scene.add(light2);
+            
+            // Globe container
+            globe = new THREE.Group();
+            scene.add(globe);
+            
+            // Add starfield background
+            createStarfield();
+
+            // Add red marker at antipode
+            createAntipodeDot();
+
+            // Create city lights
+            createCityLights();
+            
+            // Create grid lines (Tropic of Cancer southward only)
+            createGridLines();
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        function createStarfield() {
+            // Create thousands of stars as points
+            const starCount = 8000;
+            const starGeometry = new THREE.BufferGeometry();
+            const starPositions = [];
+            
+            for (let i = 0; i < starCount; i++) {
+                // Random position scaled with globe size
+                const radius = CONFIG.globeRadius * 10 + Math.random() * CONFIG.globeRadius * 10;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                const x = radius * Math.sin(phi) * Math.cos(theta);
+                const y = radius * Math.sin(phi) * Math.sin(theta);
+                const z = radius * Math.cos(phi);
+                
+                starPositions.push(x, y, z);
+            }
+            
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+            
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: Math.sqrt(SCALE) * 1.5,  // Scales with sqrt for visibility
+                sizeAttenuation: true
+            });
+            
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+        
+        function createNYCGroundMarker() {
+            // 2 sq ft reference square at NYC
+            // Earth radius = 6,371 km, globe radius = 5 units
+            // Scale: 1 unit = 1,274.2 km
+            // Reference square scaled with globe
+            const size = 0.006 * SCALE;
+            const geometry = new THREE.PlaneGeometry(size, size);
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff88,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const marker = new THREE.Mesh(geometry, material);
+            
+            // Position at NYC on globe surface
+            const nycPos = latLongToVector3(CONFIG.nycLat, CONFIG.nycLon, CONFIG.globeRadius + 0.0002 * SCALE);
+            marker.position.copy(nycPos);
+            
+            // Orient to lie flat on the tangent plane (perpendicular to surface normal)
+            marker.lookAt(0, 0, 0);
+            marker.rotateX(Math.PI / 2); // Lay flat
+            
+            scene.add(marker);
+            
+            // Add a small label/outline
+            const outlineGeometry = new THREE.EdgesGeometry(geometry);
+            const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+            const outline = new THREE.LineSegments(outlineGeometry, outlineMaterial);
+            outline.position.copy(nycPos);
+            outline.lookAt(0, 0, 0);
+            outline.rotateX(Math.PI / 2);
+            scene.add(outline);
+        }
+        
+        function createAntipodeDot() {
+            const pos = latLongToVector3(CONFIG.antipodeLat, CONFIG.antipodeLon, CONFIG.globeRadius + 0.005 * SCALE);
+
+            // Red marker sphere
+            const dotGeometry = new THREE.SphereGeometry(0.015 * SCALE, 16, 16);
+            const dotMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+            const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+            dot.position.copy(pos);
+            scene.add(dot);
+
+            // Red ring around the antipode
+            const ringGeometry = new THREE.RingGeometry(0.03 * SCALE, 0.045 * SCALE, 48);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff4444,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.6
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.copy(pos);
+            ring.lookAt(0, 0, 0);
+            scene.add(ring);
+        }
+        
+        function createCityLights() {
+            CITIES.forEach(city => {
+                const [name, lat, lon, brightness] = city;
+                
+                // North America is now visible - include all cities
+                
+                // Larger, brighter lights - scaled LINEARLY with globe so they
+                // stay visible from across the planet (sqrt scaling made them
+                // sub-pixel at large SCALE)
+                const size = (0.02 + (brightness - 1) * 0.015) * SCALE;
+                const geometry = new THREE.SphereGeometry(size, 12, 12);
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0xffeeaa,  // Warmer, brighter yellow
+                    transparent: true,
+                    opacity: 0
+                });
+                
+                const pos = latLongToVector3(lat, lon, CONFIG.globeRadius + 0.002 * SCALE);
+                const light = new THREE.Mesh(geometry, material);
+                light.position.copy(pos);
+                
+                scene.add(light);
+                cityLights.push({ mesh: light, lat, lon, brightness });
+                
+                // Add a glow halo for major cities (brightness >= 4)
+                if (brightness >= 4) {
+                    const glowSize = size * 2.5;
+                    const glowGeometry = new THREE.SphereGeometry(glowSize, 12, 12);
+                    const glowMaterial = new THREE.MeshBasicMaterial({
+                        color: 0xffcc66,
+                        transparent: true,
+                        opacity: 0
+                    });
+                    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                    glow.position.copy(pos);
+                    scene.add(glow);
+                    cityLights.push({ mesh: glow, lat, lon, brightness: brightness * 0.4, isGlow: true });
+                }
+            });
+        }
+        
+        function createGridLines() {
+            // Full globe grid lines
+            const gridMaterial = new THREE.LineBasicMaterial({
+                color: 0x3388aa,  // Teal color
+                transparent: false,
+                opacity: 1.0
+            });
+
+            // Key latitude lines (full globe)
+            const latitudes = [
+                66.5,    // Arctic Circle
+                23.5,    // Tropic of Cancer
+                0,       // Equator
+                -23.5,   // Tropic of Capricorn
+                -66.5    // Antarctic Circle
+            ];
+
+            const gridOffset = 0.001 * SCALE;  // Scale grid line height
+
+            latitudes.forEach(lat => {
+                const points = [];
+                for (let lon = -180; lon <= 180; lon += 3) {
+                    points.push(latLongToVector3(lat, lon, CONFIG.globeRadius + gridOffset));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, gridMaterial);
+                scene.add(line);
+            });
+
+            // Longitude lines every 30° - full pole to pole
+            for (let lon = -180; lon < 180; lon += 30) {
+                const points = [];
+                for (let lat = 90; lat >= -90; lat -= 3) {
+                    points.push(latLongToVector3(lat, lon, CONFIG.globeRadius + gridOffset));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, gridMaterial);
+                scene.add(line);
+            }
+        }
+        
+        // ============================================
+        // SOLAR POSITION & DAY/NIGHT
+        // ============================================
+        
+        function getSolarPosition() {
+            const now = new Date(simulatedTime);
+            const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+            
+            const start = new Date(now.getUTCFullYear(), 0, 0);
+            const diff = now - start;
+            const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+            
+            // Solar declination (latitude of subsolar point)
+            const declination = 23.44 * Math.sin((2 * Math.PI / 365) * (dayOfYear - 81));
+            
+            // Subsolar longitude
+            const subsolarLon = (12 - utcHours) * 15;
+            
+            return { lat: declination, lon: subsolarLon };
+        }
+        
+        function isInDaylight(lat, lon, solarPos) {
+            const lat1 = solarPos.lat * Math.PI / 180;
+            const lon1 = solarPos.lon * Math.PI / 180;
+            const lat2 = lat * Math.PI / 180;
+            const lon2 = lon * Math.PI / 180;
+            
+            const cosAngle = Math.sin(lat1) * Math.sin(lat2) + 
+                           Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+            const angle = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+            
+            if (angle < 84) return 1;
+            if (angle > 96) return 0;
+            return 1 - (angle - 84) / 12;
+        }
+        
+        function updateDayNight() {
+            const solarPos = getSolarPosition();
+            
+            // Update country colors
+            countryMeshes.forEach(item => {
+                const dayAmount = isInDaylight(item.lat, item.lon, solarPos);
+                const dayColor = new THREE.Color(item.dayColor);
+                const nightColor = new THREE.Color(NIGHT_COLOR);
+                const blended = dayColor.lerp(nightColor, 1 - dayAmount);
+                item.mesh.material.color = blended;
+            });
+            
+            // Update city lights - exaggerated brightness
+            cityLights.forEach(city => {
+                const dayAmount = isInDaylight(city.lat, city.lon, solarPos);
+                const nightAmount = 1 - dayAmount;
+                
+                if (city.isGlow) {
+                    // Glow halos - softer, more spread
+                    city.mesh.material.opacity = Math.pow(nightAmount, 1.5) * (city.brightness / 5) * 0.4;
+                } else {
+                    // Main lights - bright and punchy, night only
+                    city.mesh.material.opacity = Math.pow(nightAmount, 1.5) * (city.brightness / 5) * 1.0;
+                }
+            });
+            
+            // Advance time
+            simulatedTime += 16 * CONFIG.timeSpeed;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ============================================
+        // LOOK-AROUND CONTROLS
+        // ============================================
+        
+        function onMouseDown(e) {
+            isMouseDown = true;
+            isDragging = false;
+            wasDragging = false;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        }
+        
+        function onMouseMove(e) {
+            // Only respond if mouse button is held down
+            if (!isMouseDown) return;
+            
+            const deltaX = e.clientX - lastMouseX;
+            const deltaY = e.clientY - lastMouseY;
+            
+            // Only count as dragging if moved more than a few pixels
+            if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+                isDragging = true;
+                wasDragging = true;
+            }
+            
+            if (!isDragging) return;
+            
+            const DRAG_SENSITIVITY = 0.003;
+            
+            // Horizontal drag = yaw (rotate around world Y axis)
+            const yawAxis = new THREE.Vector3(0, 1, 0);
+            lookDirection.applyAxisAngle(yawAxis, -deltaX * DRAG_SENSITIVITY);
+            upVector.applyAxisAngle(yawAxis, -deltaX * DRAG_SENSITIVITY);
+            
+            // Vertical drag = pitch (rotate toward/away from Y axis)
+            const rightVector = new THREE.Vector3().crossVectors(lookDirection, upVector).normalize();
+            lookDirection.applyAxisAngle(rightVector, -deltaY * DRAG_SENSITIVITY);
+            upVector.applyAxisAngle(rightVector, -deltaY * DRAG_SENSITIVITY);
+            
+            // Keep vectors normalized
+            lookDirection.normalize();
+            upVector.normalize();
+            
+            updateCameraLook();
+            
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        }
+        
+        function onMouseUp() {
+            isMouseDown = false;
+            isDragging = false;
+        }
+        
+        function onCanvasClick(e) {
+            // Only move if it wasn't a drag
+            if (wasDragging) {
+                wasDragging = false;
+                return;
+            }
+            
+            // Move camera in the look direction
+            const movement = lookDirection.clone().multiplyScalar(MOVE_SPEED);
+            camera.position.add(movement);
+            
+            // Recalculate tangent plane vectors for new position
+            updateTangentPlane();
+            updateCameraLook();
+        }
+        
+        function returnToNYC() {
+            // Reset to home position
+            camera.position.copy(homePosition);
+            lookDirection = homeLookDirection.clone();
+            upVector = homeUpVector.clone();
+            
+            // Recalculate tangent plane for NYC
+            updateTangentPlane();
+            updateCameraLook();
+        }
+        
+        function goToCenter() {
+            // Position camera at the center of the globe
+            camera.position.set(0, 0, 0);
+            
+            // Look toward equator/prime meridian (0°, 0°)
+            const targetPoint = latLongToVector3(0, 0, CONFIG.globeRadius);
+            lookDirection = targetPoint.clone().normalize();
+            
+            // Up vector: world up
+            upVector = new THREE.Vector3(0, 1, 0);
+            
+            updateTangentPlane();
+            updateCameraLook();
+        }
+        
+        function updateTangentPlane() {
+            // Recalculate tangent plane basis vectors for current camera position
+            surfaceNormal = camera.position.clone().normalize();
+            
+            const worldUp = new THREE.Vector3(0, 1, 0);
+            tangentEast = new THREE.Vector3().crossVectors(worldUp, surfaceNormal).normalize();
+            tangentNorth = new THREE.Vector3().crossVectors(surfaceNormal, tangentEast).normalize();
+        }
+        
+        function onKeyDown(e) {
+            // Stop Space/arrows from scrolling the page or re-triggering a
+            // focused button (Space on a focused button = click -> snapped home)
+            if (e.key === ' ' || e.key.indexOf('Arrow') === 0) e.preventDefault();
+            keysPressed[e.key] = true;
+        }
+        
+        function onKeyUp(e) {
+            keysPressed[e.key] = false;
+        }
+        
+        function processKeyboard() {
+            let changed = false;
+            const ROTATION_SPEED = 0.02;
+            
+            // Yaw: Left/Right = rotate around world Y axis
+            if (keysPressed['ArrowLeft'] || keysPressed['a'] || keysPressed['A']) {
+                const yawAxis = new THREE.Vector3(0, 1, 0);
+                lookDirection.applyAxisAngle(yawAxis, ROTATION_SPEED);
+                upVector.applyAxisAngle(yawAxis, ROTATION_SPEED);
+                changed = true;
+            }
+            if (keysPressed['ArrowRight'] || keysPressed['d'] || keysPressed['D']) {
+                const yawAxis = new THREE.Vector3(0, 1, 0);
+                lookDirection.applyAxisAngle(yawAxis, -ROTATION_SPEED);
+                upVector.applyAxisAngle(yawAxis, -ROTATION_SPEED);
+                changed = true;
+            }
+            
+            // Pitch: Up/Down = rotate toward/away from Y axis (world up/down)
+            if (keysPressed['ArrowUp'] || keysPressed['w'] || keysPressed['W']) {
+                const rightVector = new THREE.Vector3().crossVectors(lookDirection, upVector).normalize();
+                lookDirection.applyAxisAngle(rightVector, ROTATION_SPEED);
+                upVector.applyAxisAngle(rightVector, ROTATION_SPEED);
+                changed = true;
+            }
+            if (keysPressed['ArrowDown'] || keysPressed['s'] || keysPressed['S']) {
+                const rightVector = new THREE.Vector3().crossVectors(lookDirection, upVector).normalize();
+                lookDirection.applyAxisAngle(rightVector, -ROTATION_SPEED);
+                upVector.applyAxisAngle(rightVector, -ROTATION_SPEED);
+                changed = true;
+            }
+            
+            // Roll: Q/E = rotate around look direction
+            if (keysPressed['q'] || keysPressed['Q']) {
+                upVector.applyAxisAngle(lookDirection, -ROTATION_SPEED);
+                changed = true;
+            }
+            if (keysPressed['e'] || keysPressed['E']) {
+                upVector.applyAxisAngle(lookDirection, ROTATION_SPEED);
+                changed = true;
+            }
+            
+            // Spacebar = fly forward, Shift+Space = fly backward
+            if (keysPressed[' ']) {
+                const FLY_SPEED = 0.01 * SCALE;  // Scales with globe size
+                const direction = keysPressed['Shift'] ? -1 : 1;  // Backward if shift held
+                const movement = lookDirection.clone().multiplyScalar(FLY_SPEED * direction);
+                camera.position.add(movement);
+                updateTangentPlane();
+            }
+            
+            // Keep vectors normalized
+            if (changed) {
+                lookDirection.normalize();
+                upVector.normalize();
+                updateCameraLook();
+            }
+        }
+        
+        function updateCameraLook() {
+            // Flight-sim style: use stored lookDirection and upVector
+            // These are rotated by the controls around world axes
+            
+            const target = camera.position.clone().add(lookDirection);
+            camera.up.copy(upVector);
+            camera.lookAt(target);
+        }
+
+        // ============================================
+        // COORDINATE CONVERSION
+        // ============================================
+        
+        function latLongToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            
+            return new THREE.Vector3(
+                -radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.cos(phi),
+                radius * Math.sin(phi) * Math.sin(theta)
+            );
+        }
+
+        // ============================================
+        // CHECK IF IN NORTH AMERICA
+        // ============================================
+        
+        function isInNorthAmerica(lat, lon) {
+            // Rough bounding box for North America (including Central America & Caribbean)
+            // Main continent
+            if (lat > 15 && lat < 85 && lon > -170 && lon < -50) return true;
+            // Alaska extension
+            if (lat > 50 && lat < 72 && lon > -180 && lon < -130) return true;
+            // Central America
+            if (lat > 7 && lat < 25 && lon > -120 && lon < -60) return true;
+            return false;
+        }
+
+        // ============================================
+        // TERRAIN COLOR
+        // ============================================
+        
+        function getTerrainColor(lat, lon) {
+            const absLat = Math.abs(lat);
+            
+            if (absLat > 65) return DAY_COLORS.ice;
+            if (absLat > 55) return DAY_COLORS.tundra;
+            
+            // Arid regions
+            if ((lat > 15 && lat < 35 && lon > -20 && lon < 60) ||
+                (lat > -35 && lat < -20 && lon > 115 && lon < 145)) {
+                return DAY_COLORS.arid;
+            }
+            
+            if (absLat < 20) return DAY_COLORS.tropical;
+            if (absLat < 40) return DAY_COLORS.grass;
+            
+            return DAY_COLORS.forest;
+        }
+
+        // ============================================
+        // GEOMETRY CREATION
+        // ============================================
+        
+        function createCountryMesh(coordinates, properties) {
+            coordinates.forEach(ring => {
+                if (!ring || ring.length < 3) return;
+                
+                // Calculate centroid
+                let centerLat = 0, centerLon = 0;
+                ring.forEach(coord => {
+                    centerLon += coord[0];
+                    centerLat += coord[1];
+                });
+                centerLat /= ring.length;
+                centerLon /= ring.length;
+                
+                // North America is now visible
+                
+                const terrainColor = getTerrainColor(centerLat, centerLon);
+                
+                const flatPoints = [];
+                ring.forEach(coord => flatPoints.push(coord[0], coord[1]));
+                
+                let triangleIndices;
+                try {
+                    triangleIndices = earcut(flatPoints);
+                } catch (e) { return; }
+                
+                if (triangleIndices.length < 3) return;
+                
+                const vertices = [];
+                ring.forEach(coord => {
+                    const v = latLongToVector3(coord[1], coord[0], CONFIG.globeRadius);
+                    vertices.push(v.x, v.y, v.z);
+                });
+                
+                // Front face (exterior)
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geometry.setIndex(triangleIndices);
+                geometry.computeVertexNormals();
+                
+                const frontMaterial = new THREE.MeshPhongMaterial({
+                    color: terrainColor,
+                    side: THREE.FrontSide,
+                    flatShading: false,
+                    shininess: 5
+                });
+                
+                const frontMesh = new THREE.Mesh(geometry, frontMaterial);
+                globe.add(frontMesh);
+                
+                // Track for day/night updates
+                countryMeshes.push({
+                    mesh: frontMesh,
+                    lat: centerLat,
+                    lon: centerLon,
+                    dayColor: terrainColor
+                });
+                
+                // Back face (interior) - dark grey
+                const backGeometry = geometry.clone();
+                const backMaterial = new THREE.MeshBasicMaterial({
+                    color: INTERIOR_COLOR,
+                    side: THREE.BackSide
+                });
+                
+                const backMesh = new THREE.Mesh(backGeometry, backMaterial);
+                globe.add(backMesh);
+            });
+        }
+
+        // ============================================
+        // GEOJSON LOADING
+        // ============================================
+        
+        async function loadGeoJSON() {
+            const sources = [
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson',
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson'
+            ];
+            
+            for (const url of sources) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) return await response.json();
+                } catch (e) {
+                    console.warn('Failed:', url);
+                }
+            }
+            throw new Error('All sources failed');
+        }
+
+        function processGeoJSON(geojson) {
+            geojson.features.forEach(feature => {
+                const geometry = feature.geometry;
+                const properties = feature.properties || {};
+                
+                if (geometry.type === 'Polygon') {
+                    createCountryMesh(geometry.coordinates, properties);
+                } else if (geometry.type === 'MultiPolygon') {
+                    geometry.coordinates.forEach(polygon => {
+                        createCountryMesh(polygon, properties);
+                    });
+                }
+            });
+        }
+
+        // ============================================
+        // ANIMATION
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            processKeyboard();
+            updateDayNight();
+            renderer.render(scene, camera);
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        async function init() {
+            initScene();
+            
+            try {
+                const geojson = await loadGeoJSON();
+                processGeoJSON(geojson);
+                document.getElementById('loading').style.display = 'none';
+                animate();
+            } catch (error) {
+                console.error('Init failed:', error);
+                document.getElementById('loading').innerHTML = 'Failed to load data';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
+

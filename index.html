@@ -1,900 +1,146 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>Antipode</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Antipode — see through the Earth</title>
+<meta name="description" content="A family of apps that let you look through a transparent Earth at the far side of the planet.">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { height:100%; overflow:hidden; background:#000; color:#dfe9f0;
-    font:14px/1.45 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
-    -webkit-user-select:none; user-select:none; touch-action:none; }
-  #cam { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; opacity:.55; }
-  #cv  { position:fixed; inset:0; touch-action:none; }
+  :root {
+    --fg:#dfe9f0; --dim:#9fb8cc; --faint:#5a7186; --line:rgba(120,160,200,.28);
+    --panel:rgba(8,12,18,.62); --glow:#7fd4ff; --warm:#ffc46b;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:#000; color:var(--fg);
+    font:16px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif; }
+  body { max-width:860px; margin:0 auto; padding:30px 18px 60px; }
+  h1 { font-size:30px; margin:0 0 4px; font-weight:700; letter-spacing:.3px; }
+  .tag { color:var(--dim); margin:0 0 26px; max-width:58ch; }
+  a { color:var(--glow); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  h2 { font-size:13px; color:var(--dim); text-transform:uppercase; letter-spacing:.8px;
+    margin:30px 0 10px; font-weight:600; }
 
-  .chip { background:rgba(8,12,18,.62); border:1px solid rgba(120,160,200,.28);
-    border-radius:8px; padding:3px 9px; font-size:11px;
-    font-family:ui-monospace, Menlo, Consolas, monospace; white-space:nowrap; }
-  #chips { position:fixed; top:calc(8px + env(safe-area-inset-top)); left:10px;
-    display:flex; flex-direction:column; gap:6px; align-items:flex-start;
-    pointer-events:none; z-index:20; }
-  #readout { position:fixed; top:calc(8px + env(safe-area-inset-top)); left:50%;
-    transform:translateX(-50%); text-align:center; pointer-events:none; z-index:20;
-    background:rgba(8,12,18,.62); border:1px solid rgba(120,160,200,.28);
-    border-radius:10px; padding:5px 12px; font-family:ui-monospace, Menlo, monospace;
-    font-size:12px; max-width:88vw; }
-  #readout .sub { font-size:11px; color:#9fb8cc; }
-  #note { position:fixed; bottom:calc(80px + env(safe-area-inset-bottom)); left:50%;
-    transform:translateX(-50%); z-index:22; pointer-events:none;
-    background:rgba(40,20,8,.8); border:1px solid rgba(255,170,80,.5);
-    border-radius:8px; padding:4px 12px; font-size:12px; display:none; max-width:86vw; }
+  .devices { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+  .dev { background:var(--panel); border:1.5px solid var(--line); border-radius:14px;
+    padding:14px 10px; text-align:center; cursor:pointer; color:var(--fg); font-size:15px; }
+  .dev .ico { font-size:30px; display:block; margin-bottom:6px; }
+  .dev:hover { border-color:var(--glow); }
+  .dev.sel { border-color:var(--glow); background:rgba(127,212,255,.1); }
+  .dev small { color:var(--faint); display:block; font-size:11.5px; margin-top:3px; }
 
-  #btns { position:fixed; right:10px; bottom:calc(14px + env(safe-area-inset-bottom));
-    display:flex; flex-direction:column; gap:10px; z-index:31; }
-  #btns button { width:48px; height:48px; border-radius:50%; border:1px solid rgba(140,180,220,.4);
-    background:rgba(10,16,24,.78); color:#dfe9f0; font-size:20px; cursor:pointer; }
-  #btns button.on { background:rgba(50,120,200,.85); border-color:#9cf; }
+  .pick { margin-top:18px; }
+  .card { display:block; background:var(--panel); border:1.5px solid var(--glow); border-radius:14px;
+    padding:16px 18px; color:var(--fg); }
+  .card:hover { background:rgba(127,212,255,.08); text-decoration:none; }
+  .card .name { font-size:19px; font-weight:650; color:var(--glow); }
+  .card .what { color:var(--dim); margin-top:4px; font-size:14.5px; }
+  .card .go { float:right; font-size:22px; color:var(--glow); margin-top:8px; }
+  .also { margin-top:10px; font-size:14px; color:var(--dim); }
+  .also a { margin-right:14px; }
 
-  #panel { position:fixed; left:0; right:0; bottom:0; z-index:30;
-    background:rgba(9,13,20,.94); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
-    border-top:1px solid #24384c; padding:12px 14px calc(14px + env(safe-area-inset-bottom));
-    max-height:62%; overflow-y:auto; }
-  #panel h3 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#7fa8c8; margin:4px 0 8px; }
-  .row { display:flex; align-items:center; gap:8px; margin:9px 0; flex-wrap:wrap; }
-  .row label { flex:0 0 108px; font-size:12px; color:#b8ccd9; }
-  .row input[type=range] { flex:1; min-width:120px; }
-  .row .val { flex:0 0 58px; text-align:right; font-family:ui-monospace, Menlo, monospace; font-size:12px; }
-  .row input[type=text], .row input[type=number] { width:96px; background:#0d1622; color:#dfe9f0;
-    border:1px solid #2a4258; border-radius:6px; padding:5px 7px; font-size:13px; }
-  .row button, #panel select { background:#16283a; color:#dfe9f0; border:1px solid #2a4258;
-    border-radius:6px; padding:6px 11px; font-size:12px; cursor:pointer; }
-  #panel select { max-width:210px; }
-  .row.checks label { flex:none; display:flex; align-items:center; gap:4px; }
-  .note-sm { font-size:11px; color:#8aa2b5; margin:6px 0; }
-  .hidden { display:none !important; }
-
-  #startOverlay { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; text-align:center; padding:26px;
-    background:radial-gradient(ellipse at 50% 120%, #0a2038 0%, #04080e 70%); }
-  #startOverlay h1 { font-size:34px; letter-spacing:.28em; font-weight:300; margin-bottom:14px; }
-  #startOverlay p { max-width:420px; color:#a8bfd0; font-size:14px; margin:6px 0; }
-  #startBtn { margin-top:22px; font-size:18px; padding:14px 52px; border-radius:999px;
-    border:1px solid #4a90d0; background:#12395e; color:#e6f2ff; cursor:pointer; }
-  #testPanel { position:fixed; inset:0; z-index:60; background:rgba(3,6,10,.95);
-    padding:calc(16px + env(safe-area-inset-top)) 16px 16px; overflow:auto; }
-  #testPanel pre { font:12px/1.7 ui-monospace, Menlo, Consolas, monospace; white-space:pre-wrap; }
-  #testPanel .ok { color:#7fe0a0; } #testPanel .bad { color:#ff9090; }
-  #testClose { margin-top:14px; background:#16283a; color:#dfe9f0; border:1px solid #2a4258;
-    border-radius:6px; padding:8px 18px; font-size:13px; }
+  .menu { list-style:none; padding:0; margin:0; }
+  .menu li { border-bottom:1px solid rgba(120,160,200,.14); padding:9px 2px; font-size:14.5px; }
+  .menu li:last-child { border:none; }
+  .menu .n { font-weight:600; }
+  .menu .d { color:var(--faint); }
+  .menu .b { display:inline-block; font-size:10.5px; border:1px solid var(--line); border-radius:5px;
+    padding:0 6px; margin-left:8px; color:var(--dim); vertical-align:1px; }
+  footer { margin-top:40px; color:var(--faint); font-size:13px; }
 </style>
 </head>
 <body>
 
-<video id="cam" autoplay playsinline muted></video>
-<canvas id="cv"></canvas>
+<h1>Antipode</h1>
+<p class="tag">If the Earth were transparent, what would you see beneath your feet?
+These apps draw the far side of the planet — live, correctly oriented, locked to the world.
+Straight down is your exact antipode; the horizon is your own position, in every direction at once.</p>
 
-<div id="chips">
-  <div class="chip" id="chipLoc">location: —</div>
-  <div class="chip" id="chipHead">heading: —</div>
-  <div class="chip hidden" id="chipFroze">FROZEN</div>
-</div>
-<div id="readout"><div id="roMain">—</div><div class="sub" id="roSub"></div></div>
-<div id="note"></div>
-
-<div id="btns">
-  <button id="freezeBtn" title="Freeze orientation">&#10052;</button>
-  <button id="gearBtn" title="Settings">&#9881;</button>
+<h2>What are you using?</h2>
+<div class="devices" id="devices">
+  <button class="dev" data-d="phone"><span class="ico">📱</span>Phone / tablet<small>camera + motion sensors</small></button>
+  <button class="dev" data-d="laptop"><span class="ico">💻</span>Laptop<small>webcam head-tracking</small></button>
+  <button class="dev" data-d="monitor"><span class="ico">🖥️</span>Desktop + monitor<small>keyboard + mouse</small></button>
+  <button class="dev" data-d="none"><span class="ico">🤷</span>None of these<small>just curiosity</small></button>
 </div>
 
-<div id="panel" class="hidden">
-  <h3>Antipode — controls</h3>
-  <div class="row"><label>Field of view</label>
-    <input type="range" id="fov" min="40" max="130" step="1" value="60"><span class="val" id="fovVal">60&#176;</span></div>
-  <div class="row"><label>Camera opacity</label>
-    <input type="range" id="opacity" min="0" max="100" step="1" value="55"><span class="val" id="opVal">55%</span></div>
-  <div class="row"><label>Heading trim</label>
-    <input type="range" id="trim" min="-180" max="180" step="0.5" value="0"><span class="val" id="trimVal">0&#176;</span>
-    <button id="trimZero">reset</button></div>
-  <div class="row checks"><label style="flex:0 0 108px">Flip signs</label>
-    <label><input type="checkbox" id="fA">&#945;</label>
-    <label><input type="checkbox" id="fB">&#946;</label>
-    <label><input type="checkbox" id="fG">&#947;</label></div>
-  <div class="row"><label>Location</label>
-    <input type="number" id="lat" step="any" placeholder="lat" inputmode="decimal">
-    <input type="number" id="lon" step="any" placeholder="lon" inputmode="decimal">
-    <button id="locApply">set</button><button id="locGps">GPS</button></div>
-  <div class="row"><label>Camera</label><select id="camSel"><option>default</option></select></div>
-  <div class="note-sm" id="apInfo">antipode: —</div>
-  <div class="note-sm">Tip: switching to the ultra-wide (0.5&#215;) lens roughly doubles the visible &#920; —
-    from ~84&#176; to ~119&#176; at the frame corners (45% &#8594; 74% of the Earth's surface). Pick it under
-    Camera, then raise the FOV slider to match (~100&#8211;120&#176;).</div>
-  <div class="note-sm">The FOV slider is the scale calibration: if the overlay feels too zoomed-in,
-    increase it. Trim rotates the whole map about the vertical if the compass is off.</div>
-  <div class="row"><button id="runTest">Run self-test</button><button id="panelClose">close</button></div>
-</div>
+<div class="pick" id="pick"></div>
 
-<div id="startOverlay">
-  <h1>ANTIPODE</h1>
-  <p>See straight through the planet. Point your phone at the ground and the far side of the
-     Earth is drawn on the camera image, as if the planet were transparent.</p>
-  <p>Straight down is your exact antipode. Tilting toward the horizon reveals coastlines closer
-     to home — the horizon itself is your own position, in every direction at once.</p>
-  <button id="startBtn">Start</button>
-  <p style="font-size:11px;color:#5f7a92;margin-top:18px">Needs motion &amp; orientation, location and
-     camera permission. Everything runs on the phone; nothing is sent anywhere.<br>
-     No sensors (desktop)? Drag to look around. Scroll to zoom.</p>
-</div>
+<h2>Everything</h2>
+<ul class="menu">
+  <li><a class="n" href="ar/">Antipode AR</a> <span class="b">phone</span><br>
+    <span class="d">Point your phone at the ground: far-side coastlines overlaid on the live camera feed. The flagship app.</span></li>
+  <li><a class="n" href="window-imu/">Earth Window — IMU</a> <span class="b">phone · tablet</span><br>
+    <span class="d">Hold the device like a pane of glass and tilt it to aim through the planet — motion sensors only, no camera, in the spirit of iOS's Measure app.</span></li>
+  <li><a class="n" href="window/">Earth Window — head-tracked</a> <span class="b">laptop</span><br>
+    <span class="d">The screen becomes a literal window: the webcam tracks your head, and the view through the Earth shifts with parallax as you move.</span></li>
+  <li><a class="n" href="fly/">Fly Through</a> <span class="b">monitor</span><br>
+    <span class="d">A free-flying 3D Earth. WASD + mouse: dive into the planet, fly the sight-line to the antipode, and look back.</span></li>
+  <li><a class="n" href="circle/">The Circle at Your Feet</a> <span class="b">anything</span><br>
+    <span class="d">If the ground were a glass circle of radius r, how much of the far side could you see? Interactive cross-section + far-side map. (Radius = your height ⇒ half the planet.)</span></li>
+  <li><a class="n" href="aim/">Arm Aim</a> <span class="b">other</span><br>
+    <span class="d">Batch calculator + map: where to point your arm to aim at any city through the Earth.</span></li>
+</ul>
 
-<div id="testPanel" class="hidden"><pre id="testOut"></pre><button id="testClose">close</button></div>
+<h2>Earlier experiments</h2>
+<ul class="menu">
+  <li><a class="n" href="extras/through-earth.html">Through the Earth — NYC</a> <span class="d">— the first sketch.</span></li>
+  <li><a class="n" href="extras/fly-v1.html">Fly Through v1</a> <span class="d">— earlier flight model.</span></li>
+  <li><a class="n" href="extras/globe.html">Continental Globe</a> <span class="d">— orbitable 3D Earth built from Natural Earth polygons.</span></li>
+  <li><a class="n" href="extras/globe-detailed.html">Continental Globe — detailed</a> <span class="d">— higher-resolution borders.</span></li>
+  <li><a class="n" href="extras/day-night.html">Day / Night</a> <span class="d">— the globe with a live terminator.</span></li>
+</ul>
 
-<script id="core">
-/* Antipode core: pure math + data. No DOM access — this block is also executed
-   under Node by test/core-test.mjs. */
-var Antipode = (function () {
-  'use strict';
-  var D2R = Math.PI / 180, R2D = 180 / Math.PI;
-
-  /* ------------------------------------------------ coastline decoding ---
-     Base-41 varints over an 83-char alphabet (ASCII 40..126 minus < > \ `).
-     Chars 0..40: final digit. 41..81: continuation digit (+41). 82: polyline
-     separator. Values are zigzagged deltas of 0.1-degree-quantized lon,lat. */
-  var CHARSET = '';
-  for (var ci = 40; ci < 127; ci++)
-    if (ci !== 60 && ci !== 62 && ci !== 92 && ci !== 96) CHARSET += String.fromCharCode(ci);
-  var CODE = {};
-  for (var cj = 0; cj < 83; cj++) CODE[CHARSET[cj]] = cj;
-
-  var COAST_DATA = 'r*|(3;U+*A.3.U.)D8=/~TyD{IO)C.C640P+L3.1~k){)D103,9T@3TP/T.(C0,0T).:.T-JR,H+~Tg,xLD+B,3-9-E*;.,0B+~Ti2xLJ/O,E,6.=-~TZ3x*@+@*41U1(;,104,T5+~v8wC,/17T,-C(20T,-7.(0N2@(.2*B22:*4/BK~qAt4/+7,7)E11-)/(/2-5+9)M?+/:5J1:A2-./*96A)1A5C+?5G-TN37/V0)./H+@-4-?-K*E-)7B-,/B/T+)U:9U8/TI5H7U2:TM4T1(U0/40F.T3*WH=A6(.UM+-0*82,T?0T/4:0V-4U:=N4.0?,0060T?680226,B(2/B((020@)./B)T1.@(2/@.UD88.4.8+=*D7B,00=,D(0/80TE*T++@3@,TE(U888.@:=+0-:+=(F3@..0R2T).T/6:)J4:(:,*0:.T50P+8+*1F3B)H3=(L4T71R(8?(+)1M3*/B(+/;78-B)@,:8B488TK08860N040D.=)P,@)6.2687:+U0*J-T9.=)T?JF/R9P)T).H4B(6,8+B3@(P1B)@*F4:*R+N*N+R0TQ,.:4-,/67:+UH,T/)6-+/4-T+1TK1@(6.T17T/+2/@+8/@)U2)TA36-)/MIC)3/C+1/E535)9B?P)01TB-O)91+195D/2/T)5T93T--21T9+:/T7,TQ1~UXHTS484N/F0H/H0T9,T;5U=1TM-T9.U,+T/-UD4,0TN*TB,70T4,,266+2I,70G.T/)T-,H-TE480/0T42UK.50T(6-@F/TC,8/J*TK8H*(0/0..D,4-T50T5*TK6H)F*F+T5,T7+UJ(T+2D+T-2J;=.B/T1/T5.U,/20A6A*303@U2-=-0/F(TO0=+D*:68/@+D*8/TK/B8=/F*=+6/D*T)2TO0:,4..2+0AH(0*088,0-800T5D00B4=(4.H.D48*4+//;-~v*o1F3F-119(3.-/7-?*7.;*C4;2EBTIC22.6=06)8A~qAmO81+-E-/09112B48-40~w4m1I)(4,46-:+*+-/~TrPhN=-D.4)*A/-)7-.559*38)638(26)~UU8hP,/80,/(1GI017(7-9KC59(3.?*+.28D=4,J:4226..,262,/~UV/fD6;*60-,78-4)402)1G7*--*1;E7/)./*28-4?0*06.*8(4/:AD160(416-.9~T}?^K/+A6CD+.2(2/T)K~UX)[9.-)35)1*)20.0).,~UX?[/5+)0F2~UXK[+3+~UXJZL,*)1~T}M[)-)-0(.43~T}?Z2,71(+@2-~m:YC*A./)1+--4+-,7)/-+)9T,V6K5E4+2):/8(6*82*(026*61@(:.2*6P0FB.2)00)26*4.249.5~Tr*YG.56.87)/,9*1.).9)1.5T/E)+450;0,01,,,?RM,7(A27)9/E+A/;7/;T*/1+5);3/?(9/?7E4*21+95T:834/D10;*.2+6159+44*402)6793-/770(4?@,,C45(;2M)T.5;*O7+1-/G)9,E+31-(;3E*I8(42*,,*@)41=+4(2/=/0+85B2//:2-./(27F0D)406*506T)@2*,)F02.2(@.DH*:6:092,/2.22+*68:2,(.0)(,=.6143B)+4280,).044.2):,(27.4,4-4/8+.*4-4,0(,*2159-(*/5;*-J9B98-,-:-6.0=0F+D,8*,).0F0..1*3,)*/.1*;~T{+X,.-5(/48-~TfNWQ/)C6:,:3)+~Tz=WK?*+,*06+21~TzNWE++5:+4.(8C~ThFWO7-),2:=0*,P0.)T*;55~Te?VP0-4*,/T.-022*..~TgQVP)1G-E*(08,4-6(:0~Tz(W)(+K@,*0-8/.-~TxLV@+)/,/0(,=5~T_RV4P).0N/05H+B3?/?2Q(T66/+M0+29(6=B)B/*/~TmGV(15)806,-(1~Tx*V4-)/014+8,**-BA)-~Tv.UE1)++?11(E4*.:+2*,2*(*14(86)44*,+(3-3~Tj*TF--5,+0=*,/~TkET=.772T((,4D(@-~TvFU/--/=;85.,,D587*1~Tm9A.I@38@@4:(J5@+TICB;,3J3.19),5:34?4((/6+-+@/)-5)+.O.CB38C2E3*77-I,98;,+-C(086.-@18O:7(G=-1/)+0(072@.6().G(/49,/2F,2.J/*/~Ti+F7;5+;,T0++5:940N0(11,/39/=C+-:A(33-/.28;/+.*054*=5-*T23+/..:+=/(-606*66R:68-B)B(=6*+~TjJ@)71*)501-)/4-D,8.0*34)*/~T^CUM?(7:C8AFCT)7:5J961874;@)2T+-T?T=@(854761/74/0(*5016)25+A)I~Te?N@9A)-5(995);/G).?//45*1.A//2G*)D1.18):*:466-8,,8J0JNJB280(21*/H3)/5(,15/3969)1~TiEW,*A-9/=/1.7-/A4-6.230-/1*53+.08B6.18.,26()881,9~|CV)9+/8+F0J61=M+;/-~rFWP?(..(04*,((7~Th=X);C3604*44(+38:)9~TeKW@C926DD2=,7AC~Tg;XK4-4((/?7(=)2~Ti1XQ.A7..91-(6-*+44)(038:).-~Tg3Y8+9;D:).-~Tg/])4-..*-)/.5+73/+7,74)0*D1)3.+)172/4+/549+1.*0.,-.)/14+F0/*J.:4(~tR[N++E)(2**8(2),+~z=[H-+?2*.0(:)2+,-5(~x8]G:+*,8(8-,-4()-2(2///1,7(1++,-)/5-,(,5,?(/+3.*0L-0.10(03*,.4(~TaK]-717.):20@.4(,///-3~TwL]5+++,+4,.(.6-015/~Tx-^*-(-.0(.))+~Tx;^6()1((*2(~TxO^8/(+..*./~TyF^H+)-,0**+~{M_-0/=*NC:+)-8(6/)+5+T6(62/.3(/.+43(A0C,/,0,;*51/(+-/)1*B:H0L):-~zJ_C-)+4/.,4.(09(1~Tg-_-1718)84:882-7T*~zPaR?+)0B((+~z@aR+5+**2128/~TmEeD,-33/.1+-33.(2244+026-~eNf951*+;/1*+02(*.8(:.~_Af92-J()+4*)-G)(,A,,0~ZAgD-7*-+1T4=,2@)N,~W=i,45)C1(/-/.(B+42)2.~TpJg,/7,115C/M)E?5.(8M+?1A(=75I3110,:3./6=.24=266R.@+=N61RF6B+B04@,2E(79;(?~WFiB/7/,-6,.60,7~Tr0jA6+60,?E-9;I61??(+=26@*4T+@?8-~t*kHL+1//(A0-.0../~s-lQM.92.*D-@/(+~Th1lE1)K0-09.).?,-2(.T31:7=/03~p6mH59604---:-0.=/-56,2A17?*,8+,A93(62;,T:().40/,84=J648.2(59~TlGo6=*-?87/(GB)2(.2+~Tr*mH@KG.3E:?(57435+8*=)@,6*F3:*F:2/02,4K)90?~V4n?M3E*8@1=T)B:*=315,579~Y0p-37?4)0H..1~TvCpM;/1.+2H24)2-91~T:qB?;T)*+799=)=C6):IB+)31-.171E(K-1,319*5-3,H=:,I,-0@.32,6H),454A,-.00-.31(=12.=88R(~T|Ir13)C0=,8)*/~{Es6/3/*-.200(,+~|PsBA15(+.60F((+~UTHt-4+4*N/7-A09)+**0~TS@u*,12,T99(18*6/9-G.30T.;/2C)822L6(~Z*u:+5@5C5TL9TR2=0T*2N,(.T(,46J*H5H4D-J2L(~z(uH?(+202:,8-)35-~UV6u=6--8T5+R9;1I))9/+9(7.C.+2;*A)1.,0A+213/~UXJvEU=M)3~TXCvG5-C.7)E0J6J/=3~UXKw@?(+.D0~UX.wBC)~UXJwN=*F-)+;+~TV-vO);F8B5-5:5@66:*@T9+D1*17361)1O5E)?.-1ACA5E)7/)3?+C7;?/7)AH):KF,P/=/61T-5T5+)7.;6?H;8.2@1H54J0@646)65:A6B@1:-H6.T5/:,T)9./N((9.A:+83F4=@40TATB/5D1:3J-6-076+0-*AE5K-A9K)T*,T0)75C/T2T,8,JDT)8H*:1934OD1L,=@*54/A3T@;A75*):N8T4+*-T=?35)5.10()..+)-T8/7-H,.+E-5((,--.)+557).1.,1,+(/7A,610):+1,35*6-(9.).C57;-531(1/)-?5;?+5,58G(10?(?-3-)1*)0/.AR,6+278/,;1543,T6)/),-(/,++)/*/+5(549)5,3)9+97;/11-/*A,-3I+O6M65,301@+01T/44,402LN2F(.+(131+5,)/A-,+((),)-M138+,,=):,4)0*4+=1.-+-*/-5(A))+A05BA(+2(.+H2..@+@54)660*,B424(*,8)B8000(.--31)./(311070(.8/.(8B0)000.56)61(-R(2/8)4.(,T/*7-.18(81*72(@345(10(=7B+*,8(=+@/@7*/0(8T,2+*577.-N)(;84T9;21+3B.P1H(H7D?6-:(0/2M/KOQ5A57-)-5*O/T*-/+C;C);91+3?(G/7/?-?79;)5*3/G51?MIA/;53/3?37,1)925)34)1D9+56/)19CG1Q+?*,3+7,13-?+90/-*;6-20.39-73);-19(73-5=5=+/9A33A9///.?41C(C3+9/)A0T,B/6.414)L0=@8G.:8.LB/2T)5.-C3,4TC24-=)@0*DTA2H-H.8)B4D8V))J+H;2)0O=T2N/8*.7DT4U:E@.01=.68426+2/132,,):.,4D)0B4).0*)2..2*8@/.,4+:,,+:58+4,,961)+-3-)+23/+1)+4)+-*+0?,)+3.+.*0;2).-,*-++3.),*6+*,,QN*,.)+.-*)-3*C.703(;4A@C4O1U)H?6I0/0?414+2.*).,.(.5FT.T/90),*4?8+63(;@).9H*070-)3.)/,AFE,/*(,3B?.;49(12(89(+3/-4OD*8+2A8)+92342(00(2563.AR3F341*).3*-,;*+,)4;=7F(,AB+812,8(:-80:,N+F3D*,H/29..1JT6FM03:*4A2+8A6(2G6+:C83:T0*A.T(=T44E)T=:?+,5K-Q1+22=@.-.C353E56197T(5-/G1-1A/5(T69K-),T?DB*20T/B*644A--,3/32--/2;/3()4,.30C+G6)4500482.28*6)808(6.+01,60K+--5.G+E./0C4TI:8()1T)(74A0K:E042N(B2.2=0T94:)H4H-8/0,L))+J+=*U61D,U05J1=):0B.H)H0J.6/6,.26)J9F6*7B,0.B)J/T-/F+=*D1E1N+T5*:,=3@2;040R*:+=3@*L1T?,+4:,J/(9488(2=?4A0*@B6D)=1F?91P+~TcFxE1/T-.D1B2:/89205=:*=)@/:KTG;)/I)4/--TH0T:/U+-32C.9)A8U80Q,TF)10T-0I(K.H@T54=+~T]QxK93G6.*D(8+~z0xE(-T(*?+E4*00*T-)N3~TT1xG85:8T32L?)3P.=.TI9*1P.=5T//:/:9M1T/3H-H9H(-5KAA0I=C))3T7C4;-5TL=T1E*/T40T(4A2..T8=(-T8+9066TO,-.02B=+0/0G2T(.6,?69(701-M+TH.TL070=0E(-=8:=0T3.73~TZQy(B+N,.-;1J/+9K/9*5.T08(.T))?6@0~Tr*xGTJ,:0D*F/*-~TW:x??7?*38(222=,T)(P+G9A+~TfIwLT2110T,4RN;4TE*F+T1(T)5TJ;C5(/~Tu?yD?/I*O0..U,/~TWDyB3/E*A,22F,:-0-~TrJyN77TJ(I+Q624D,T5(TI1~TZ)z98/(315I)?,(2I()6@(H.F(**~T_Iz/0/:,=(,131TD+T0/G(+.T)2U/+E,F=:.T7/N3L(E::0@).1~q*w=TL*-0M.)2=,)4R89*T/:-2UHBTC*L0R*6/5-V09T=;T=O,9P7~TX/zC@-R(:/--N1T7)J,TK(=/./5+E-C,U9+I*T2.1@;0T(*?000R)~TdEzM)57/U-3E,L8T)4T9*~T_0zA,1=,T9(T+18/+1TJ77-T5/:,252.J,TA+,1U*)*6TK)J3233/B7J/==J/L.P/6.L)7:F0W83:3T37TQ,R)8/)7B-F,N*N+P*N9B.7620T?-T)*T91F/~UXKtGC1C*:1472-*/--M,TJ7T:E//E6T271091E,-5A;*/@+)E;)/70/K3/?G+-?E9/6;TK2F:4(0J.TGT+N88HA)39T2?7DT2/T0I85TJ-(6G,C1T:*TB-V:U+J)23=+42@)F?*97;)A/IGE/5TBT8E33(32E5)//*//--(5?5?/)3:3:A.3(A/19+7/9))2,81=8,581,/+),1,24)*.4),;.E-7/;-22+08432Q;33;)11438+(18+@6:/6(*3E+139115=10;DK(73+,34-/I3)T.THT6K?)31/.3/E1;+/?1(-6.0E.M;79+5LT.:3470O)KQC79A9/4.6747*9J909(,89()?7T,(76(09,9214+FA03)A,90-.9(-5)T(J)234):/2*6+2/.+2;@+3)40H)8.6/4*@/21T1/8MAA..D+:7B,.3,583H/49(*/-31,))5,)/O+(711E5AAKC(/E31)-7.T(/9(K3)/7.-9-/3/-9:9T/7F1P9F5TA(B+=E35*CB00-.?:7,-856U7-TR4/D1*7);1A.;8;.ET+1)5.-/3*,1)+6I2+,/6/)76?)6.2.*.-(3+3,/,*(-8,F)T/T-*)+3*7054-D-89.+(+CO1*+-)1(71(3-)1++3(/-(/1+3(M3+7T29957(1/M-33G)-4*45F,*+H-.(01.3:-856/*5=(D3@;43D-,GT-1(.F5K-+785H))0?FT2JT*+)(5F?.;++*;0A:3:T(PET)T((/3-8/492(R0N4:(=.0.0()EGTLMT2?CTFT2?A/75/-/-)+5-/+3//1A*34-+9(76I0+,1*TD,15E33T(9T2T*)527,7,(+E,+)/1/Q9/-*/,)/T(-193AKOK5/I1)+3*1+?,;)O13/1(/.-*10())8/6.,(6OT?58/67TA)N9B7P7:+F,:6T-@H*D-.1B.41L14*,/@T0T93=6T)+,2P/41,+2+*(.;//*/-7*14/656T.+TNE9.K,A+K51*;0T.R;212-@9=1.+694/(+2-,+=*0/81.0,6B(4,2,:-H*2+230*:0..2(..646.*.4(2064.6=20:*D=88+D2F44N:=L6(41=*F+=2@,40=.TC.2+=0=(0+6(@26+(180*+11(1.+)951,14(,10+B-0*8+D/29T-3@1=6-8.0824*F+./L-.-D(T/5B4:*6+.1,0J-820D=N)8,0-2003)9,53G)72?*+/5+;4?(3=522832@:H*06P)B4B.L(T??B,:)B2*2+4303*IBA0726,8810F0(.K-3-;)7-(32-=*+/?+C13,,0;.@4-,I,(0;)?C(-1+-*+A3/-50;:-++A)A7-4A*A+631)3(12++,341/+=7(19,.13)095(703H9=+430)0,=34T8B76,*10(03*-/-.(0,*7*7-(7.1:127@78(.--+J3=5+/327*138/)11)17/),:,,5=/,-03,105*70IB-=C2T.CO.G-)A95C+)-33/7033/+55+55T,(;71*-0-2;,/-1,1),8)41*+.*600,=+@(6/0F6TK-T/(24,R;@72G0)6D,L--B:1T-8.8L02.:HF08(,,8(,+62+0)4/2(=04:*B2)1+-*-2)+/-*55,1(/@+)/@,2.J5TG@=+*-=(,2F.+8(824:0878(.F-)5.)4T30T))@2;2M)TD334;.,=/:04:4T;D)0E2K-;5,3THK5E65=19??-/K19A*37A(-:7@7H34QAE+C2/@-T-:4T5:P=U,TCU.RT+2J)H8P(N,T?5C-@3=.L3T5+TMA8/(5?1I-U/85+J5*GT)3*2326.T/38.36T-=:):-46742454T7-23A)(36-J,,4UHF8);3B)6.P*H0@3B4?440T9/U:E62;2).A*0038(.N:6:6,T5+,3;76-.5+E@315OE@)0.@..2:23206?*+28=C8N6+62*23/;@)16L0T)(N198)=N.U0(74B4@(R2T3,.,T5*8+T+2P(,2=0T/0L-E-T-)~lQi.252).+7)/A-+(1.5:+61H+H.*,+6,@7..65(,:=-8054-27+)7/:.0+0A./:3.(.=)(6:,8),:+6;)7,T(3139+;;:9)5JK~TWHzKT.*+,R(6+))~TaHzOO-E.80F*F+--~a*{(T*1M.6,30T),0/F+~Ta={6A+I((,=,N+~TXG{,G+7,10(0N)B/+-~TZK{00/I*I.T,*=.A,)0U4161~T^3{0UI/PD8*TC3-/~[P{NTA5T0/179+17A(T(4:.G.Q:78T7.2-F(0.H*D/~a8|1R-G3T8)T8,+,E*?0T?.F+=.T1-~mP|3T*+))A+?,40T,(TG,,-H0H+/+~TZH{=T()T6,K076C,T36T).R3T-9-9~TT9{NB/E-M5M)T(*?2*.8.O(?.32F6=*/,T-*D3TC/83~v8}@U6+P-)+UK9T+(TP9K7Q+5+T:)F)5+819-I-1/E-,+L((+T43T2.T8+TD,)2N,166*T31C6K,80N,..E0/4TG+J0UK(M070A.+.U20H0B)@-84T?,TI(T9*U,)~b0}HV+7O/W;)2+TG*T?-P.8/?1T3.U60T;+4/TR51+T@+T-)QC(AB3G)K-P1,9?(D9T*)B//-T6+D5(/Q01-F+D3.7K+Q:.3A3U()UCITR/;/E;T*5TD195(513I707;ME)G:Q(925=KB16+:E:0650=BH.00,8T23A.)602T;+T2:;)7.@:T2T)C0(0T44V=(T8:T3.R*U),T,0*0VE=00T4.80TG6H*12UF0T?(@-T32UN5T.2*0TE4TG(D.TG*VO)';
-
-  function decodeCoastInt(s) {
-    var lines = [], cur = [], px = 0, py = 0, acc = 0, pend = null, hasPend = false;
-    for (var i = 0; i < s.length; i++) {
-      var c = CODE[s[i]];
-      if (c === 82) {
-        if (cur.length) lines.push(cur);
-        cur = []; px = 0; py = 0; acc = 0; hasPend = false;
-      } else if (c >= 41) {
-        acc = acc * 41 + (c - 41);
-      } else {
-        acc = acc * 41 + c;
-        var v = (acc % 2 === 0) ? acc / 2 : -(acc + 1) / 2;
-        acc = 0;
-        if (!hasPend) { pend = v; hasPend = true; }
-        else { px += pend; py += v; cur.push([px, py]); hasPend = false; }
-      }
-    }
-    if (cur.length) lines.push(cur);
-    return lines;
-  }
-
-  function decodeCoast(s) {
-    return decodeCoastInt(s).map(function (line) {
-      return line.map(function (p) { return [p[0] / 10, p[1] / 10]; });
-    });
-  }
-
-  /* Subdivide so no segment exceeds `step` degrees in either lon or lat.
-     Near the horizon the projection magnifies enormously; coarse segments
-     there would draw straight shortcuts across curved coastline. */
-  function densify(lines, step) {
-    return lines.map(function (line) {
-      var out = [line[0]];
-      for (var i = 1; i < line.length; i++) {
-        var x0 = line[i - 1][0], y0 = line[i - 1][1], x1 = line[i][0], y1 = line[i][1];
-        var n = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / step));
-        for (var k = 1; k <= n; k++) out.push([x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n]);
-      }
-      return out;
-    });
-  }
-
-  /* ---------------------------------------------------------- geometry ---
-     A far-surface point at great-circle distance Theta from the antipode is
-     seen at nadir angle nu = Theta/2 (inscribed angle theorem), at azimuth
-     equal to the initial bearing from the observer. */
-  function enuBasis(lat0, lon0) {
-    var p = lat0 * D2R, l = lon0 * D2R;
-    var cp = Math.cos(p), sp = Math.sin(p), cl = Math.cos(l), sl = Math.sin(l);
-    return { ex: -sl, ey: cl, ez: 0,
-             nx: -sp * cl, ny: -sp * sl, nz: cp,
-             ux: cp * cl, uy: cp * sl, uz: sp };
-  }
-
-  function dirFor(lat, lon, B) {
-    var p = lat * D2R, l = lon * D2R, cp = Math.cos(p);
-    var fx = cp * Math.cos(l), fy = cp * Math.sin(l), fz = Math.sin(p);
-    var e = fx * B.ex + fy * B.ey;
-    var n = fx * B.nx + fy * B.ny + fz * B.nz;
-    var u = fx * B.ux + fy * B.uy + fz * B.uz;
-    var theta = Math.acos(Math.max(-1, Math.min(1, -u)));
-    var nu = theta / 2;
-    var hyp = Math.max(Math.hypot(e, n), 1e-15);
-    var s = Math.sin(nu);
-    return [s * e / hyp, s * n / hyp, -Math.cos(nu)];
-  }
-
-  function buildDirs(linesDeg, lat0, lon0) {
-    var B = enuBasis(lat0, lon0);
-    return linesDeg.map(function (line) {
-      var a = new Float32Array(line.length * 3);
-      for (var i = 0; i < line.length; i++) {
-        var d = dirFor(line[i][1], line[i][0], B);
-        a[i * 3] = d[0]; a[i * 3 + 1] = d[1]; a[i * 3 + 2] = d[2];
-      }
-      return a;
-    });
-  }
-
-  function normLon(l) { l = ((l + 180) % 360 + 360) % 360 - 180; return l; }
-  function antipodeOf(lat, lon) { return [-lat, normLon(lon + 180)]; }
-
-  function gcDistDeg(lat1, lon1, lat2, lon2) {
-    var p1 = lat1 * D2R, p2 = lat2 * D2R, dl = (lon2 - lon1) * D2R;
-    var a = Math.sin((p2 - p1) / 2); a *= a;
-    var b = Math.sin(dl / 2); b = Math.cos(p1) * Math.cos(p2) * b * b;
-    return 2 * Math.atan2(Math.sqrt(a + b), Math.sqrt(Math.max(0, 1 - a - b))) * R2D;
-  }
-
-  function destPoint(lat0, lon0, bearingDeg, distDeg) {
-    var p1 = lat0 * D2R, l1 = lon0 * D2R, br = bearingDeg * D2R, d = distDeg * D2R;
-    var sp = Math.sin(p1), cp = Math.cos(p1), sd = Math.sin(d), cd = Math.cos(d);
-    var p2 = Math.asin(Math.max(-1, Math.min(1, sp * cd + cp * sd * Math.cos(br))));
-    var l2 = l1 + Math.atan2(Math.sin(br) * sd * cp, cd - sp * Math.sin(p2));
-    return [p2 * R2D, normLon(l2 * R2D)];
-  }
-
-  /* -------------------------------------------------------- quaternions ---
-     q = [w,x,y,z], Hamilton product. qFromEuler builds the W3C Z-X'-Y''
-     intrinsic rotation: the quaternion (and its matrix) maps device-frame
-     vectors to ENU-frame vectors (x east, y north, z up). */
-  function qMul(a, b) {
-    return [a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
-            a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
-            a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
-            a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]];
-  }
-  function qNorm(q) {
-    var m = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
-    return [q[0]/m, q[1]/m, q[2]/m, q[3]/m];
-  }
-  function qAxisZ(rad) { return [Math.cos(rad/2), 0, 0, Math.sin(rad/2)]; }
-  function qFromEuler(alpha, beta, gamma) {
-    var qz = [Math.cos(alpha/2), 0, 0, Math.sin(alpha/2)];
-    var qx = [Math.cos(beta/2), Math.sin(beta/2), 0, 0];
-    var qy = [Math.cos(gamma/2), 0, Math.sin(gamma/2), 0];
-    return qMul(qMul(qz, qx), qy);
-  }
-  function qSlerp(a, b, t) {
-    var d = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
-    if (d < 0) { d = -d; b = [-b[0], -b[1], -b[2], -b[3]]; }
-    if (d > 0.9995) {
-      return qNorm([a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t,
-                    a[2] + (b[2]-a[2])*t, a[3] + (b[3]-a[3])*t]);
-    }
-    var th = Math.acos(Math.min(1, d)), s = Math.sin(th);
-    var wa = Math.sin((1 - t) * th) / s, wb = Math.sin(t * th) / s;
-    return [a[0]*wa + b[0]*wb, a[1]*wa + b[1]*wb, a[2]*wa + b[2]*wb, a[3]*wa + b[3]*wb];
-  }
-  function qToMat(q) {
-    var w = q[0], x = q[1], y = q[2], z = q[3];
-    return [1 - 2*(y*y + z*z), 2*(x*y - w*z),     2*(x*z + w*y),
-            2*(x*y + w*z),     1 - 2*(x*x + z*z), 2*(y*z - w*x),
-            2*(x*z - w*y),     2*(y*z + w*x),     1 - 2*(x*x + y*y)];
-  }
-  /* Direct W3C matrix, used by the self-test to cross-check qFromEuler. */
-  function w3cMat(alpha, beta, gamma) {
-    var cA = Math.cos(alpha), sA = Math.sin(alpha);
-    var cB = Math.cos(beta),  sB = Math.sin(beta);
-    var cG = Math.cos(gamma), sG = Math.sin(gamma);
-    return [cA*cG - sA*sB*sG, -sA*cB, cA*sG + sA*sB*cG,
-            sA*cG + cA*sB*sG,  cA*cB, sA*sG - cA*sB*cG,
-            -cB*sG,            sB,    cB*cG];
-  }
-  /* Heading (deg CW from north) of the device's physical +y axis. */
-  function headingOfMat(m) {
-    var h = Math.atan2(m[1], m[4]) * R2D;
-    return (h % 360 + 360) % 360;
-  }
-
-  /* --------------------------------------------------------------- data --- */
-  var CITIES = [
-    {n:'Tokyo',la:35.68,lo:139.69},{n:'Osaka',la:34.69,lo:135.50},{n:'Seoul',la:37.57,lo:126.98},
-    {n:'Beijing',la:39.90,lo:116.41},{n:'Shanghai',la:31.23,lo:121.47},{n:'Hong Kong',la:22.32,lo:114.17},
-    {n:'Manila',la:14.60,lo:120.98},{n:'Ho Chi Minh City',la:10.82,lo:106.63},{n:'Bangkok',la:13.76,lo:100.50},
-    {n:'Singapore',la:1.35,lo:103.82},{n:'Jakarta',la:-6.21,lo:106.85},{n:'Dhaka',la:23.81,lo:90.41},
-    {n:'Delhi',la:28.61,lo:77.21},{n:'Mumbai',la:19.08,lo:72.88},{n:'Karachi',la:24.86,lo:67.01},
-    {n:'Tehran',la:35.69,lo:51.39},{n:'Baghdad',la:33.31,lo:44.36},{n:'Istanbul',la:41.01,lo:28.98},
-    {n:'Moscow',la:55.76,lo:37.62},{n:'Cairo',la:30.04,lo:31.24},{n:'Nairobi',la:-1.29,lo:36.82},
-    {n:'Johannesburg',la:-26.20,lo:28.05},{n:'Cape Town',la:-33.92,lo:18.42},{n:'Lagos',la:6.52,lo:3.38},
-    {n:'Antananarivo',la:-18.88,lo:47.51},{n:'Rome',la:41.90,lo:12.50},{n:'Berlin',la:52.52,lo:13.40},
-    {n:'Paris',la:48.86,lo:2.35},{n:'Madrid',la:40.42,lo:-3.70},{n:'London',la:51.51,lo:-0.13},
-    {n:'Reykjavik',la:64.15,lo:-21.94},{n:'New York',la:40.71,lo:-74.01},{n:'Toronto',la:43.65,lo:-79.38},
-    {n:'Chicago',la:41.88,lo:-87.63},{n:'Mexico City',la:19.43,lo:-99.13},{n:'Los Angeles',la:34.05,lo:-118.24},
-    {n:'Vancouver',la:49.28,lo:-123.12},{n:'Anchorage',la:61.22,lo:-149.90},{n:'Honolulu',la:21.31,lo:-157.86},
-    {n:'Bogota',la:4.71,lo:-74.07},{n:'Lima',la:-12.05,lo:-77.04},{n:'Santiago',la:-33.45,lo:-70.67},
-    {n:'Buenos Aires',la:-34.60,lo:-58.38},{n:'Sao Paulo',la:-23.55,lo:-46.63},{n:'Rio de Janeiro',la:-22.91,lo:-43.17},
-    {n:'Perth',la:-31.95,lo:115.86},{n:'Sydney',la:-33.87,lo:151.21},{n:'Melbourne',la:-37.81,lo:144.96},
-    {n:'Auckland',la:-36.85,lo:174.76},{n:'Wellington',la:-41.29,lo:174.78},{n:'Punta Arenas',la:-53.16,lo:-70.91},
-    {n:'South Pole',la:-90,lo:0},{n:'North Pole',la:90,lo:0}
-  ];
-
-  /* Spec acceptance Test 3: observer at New York, phone flat, top edge north.
-     Screen units of focal length: x = d.x/-d.z (east+), y = d.y/-d.z (north+). */
-  var TEST3 = [
-    {n:'antipode',  la:-40.7128, lo:105.9940, th:  0.0, x: 0.000, y: 0.000},
-    {n:'Perth',     la:-31.9523, lo:115.8613, th: 11.8, x:-0.073, y: 0.073},
-    {n:'Sydney',    la:-33.8688, lo:151.2093, th: 36.2, x:-0.326, y:-0.023},
-    {n:'South Pole',la:-90.0,    lo:  0.0,    th: 49.3, x: 0.000, y:-0.459},
-    {n:'Jakarta',   la: -6.2088, lo:106.8456, th: 34.5, x:-0.008, y: 0.311},
-    {n:'Cape Town', la:-33.9249, lo: 18.4241, th: 67.0, x: 0.596, y:-0.288},
-    {n:'Mumbai',    la: 19.0760, lo: 72.8777, th: 67.2, x: 0.372, y: 0.551},
-    {n:'Reykjavik', la: 64.1466, lo:-21.9426, th:142.2, x: 1.639, y: 2.418}
-  ];
-
-  /* ----------------------------------------------------------- self-test --- */
-  function runSelfTest() {
-    var res = [];
-    function T(name, pass, detail) { res.push({ name: name, pass: !!pass, detail: detail || '' }); }
-
-    try {
-      var li = decodeCoastInt(COAST_DATA);
-      var nv = 0, bad = 0, seams = 0;
-      for (var i = 0; i < li.length; i++) {
-        nv += li[i].length;
-        for (var j = 0; j < li[i].length; j++) {
-          var x = li[i][j][0], y = li[i][j][1];
-          if (x < -1800 || x > 1800 || y < -900 || y > 900 || x !== Math.round(x)) bad++;
-          if (j > 0) {
-            var x0 = li[i][j-1][0], y0 = li[i][j-1][1];
-            if (Math.abs(x - x0) > 1800 ||
-                (Math.abs(y) > 899 && Math.abs(y0) > 899) ||
-                (Math.abs(x) > 1799 && Math.abs(x0) > 1799)) seams++;
-          }
-        }
-      }
-      T('coastline decode', li.length >= 100 && nv >= 3500 && bad === 0,
-        li.length + ' polylines, ' + nv + ' vertices, ' + bad + ' out of range');
-      T('no closure-seam segments in data', seams === 0, seams + ' seam segments');
-
-      var den = densify(decodeCoast(COAST_DATA), 0.25);
-      var maxStep = 0, dv = 0;
-      for (var a = 0; a < den.length; a++) {
-        dv += den[a].length;
-        for (var b = 1; b < den[a].length; b++) {
-          maxStep = Math.max(maxStep,
-            Math.abs(den[a][b][0] - den[a][b-1][0]),
-            Math.abs(den[a][b][1] - den[a][b-1][1]));
-        }
-      }
-      T('densified segments ≤ 0.25°', maxStep <= 0.2501,
-        'max ' + maxStep.toFixed(4) + '°, ' + dv + ' vertices after densify');
-
-      var NY = [40.7128, -74.0060];
-      var B = enuBasis(NY[0], NY[1]);
-      var ap = antipodeOf(NY[0], NY[1]);
-      var d0 = dirFor(ap[0], ap[1], B);
-      T('antipode projects to nadir (0,0,-1)',
-        Math.abs(d0[0]) < 1e-6 && Math.abs(d0[1]) < 1e-6 && Math.abs(d0[2] + 1) < 1e-6,
-        '(' + d0.map(function (v) { return v.toFixed(8); }).join(', ') + ')');
-      var dOwn = dirFor(NY[0], NY[1], B);
-      T('own position maps to horizon (z = 0)', Math.abs(dOwn[2]) < 1e-6,
-        'z = ' + dOwn[2].toExponential(2));
-
-      var worst = 0, worstName = '';
-      for (var t = 0; t < TEST3.length; t++) {
-        var tt = TEST3[t], d = dirFor(tt.la, tt.lo, B);
-        var sx = d[0] / -d[2], sy = d[1] / -d[2];
-        var err = Math.max(Math.abs(sx - tt.x), Math.abs(sy - tt.y));
-        if (err > worst) { worst = err; worstName = tt.n; }
-      }
-      T('Test 3 table: 8 targets from New York', worst < 0.006,
-        'worst error ' + worst.toFixed(4) + ' (' + worstName + ')');
-
-      var dP = dirFor(TEST3[1].la, TEST3[1].lo, B);
-      T('mirror check: Perth (NE of antipode) at screen WEST', dP[0] / -dP[2] < 0,
-        'x = ' + (dP[0] / -dP[2]).toFixed(3) + ' (must be negative)');
-
-      var sets = [[10,20,30],[123,-45,67],[300,80,-80],[0,0,0],[90,0,0],[45,175,-30]];
-      var mErr = 0;
-      for (var s = 0; s < sets.length; s++) {
-        var e = sets[s];
-        var m1 = qToMat(qFromEuler(e[0]*D2R, e[1]*D2R, e[2]*D2R));
-        var m2 = w3cMat(e[0]*D2R, e[1]*D2R, e[2]*D2R);
-        for (var k = 0; k < 9; k++) mErr = Math.max(mErr, Math.abs(m1[k] - m2[k]));
-      }
-      T('quaternion matches W3C Z-X′-Y″ matrix', mErr < 1e-9, 'max diff ' + mErr.toExponential(2));
-
-      var mi = qToMat(qFromEuler(0, 0, 0)), iErr = 0;
-      var I = [1,0,0, 0,1,0, 0,0,1];
-      for (var k2 = 0; k2 < 9; k2++) iErr = Math.max(iErr, Math.abs(mi[k2] - I[k2]));
-      T('flat phone, top north = identity', iErr < 1e-12, 'max diff ' + iErr.toExponential(2));
-
-      /* Counter-rotation (spec Test 2): rotate device 90deg CCW about vertical
-         (alpha 0 -> 90); a target at bearing A must appear at screen bearing A+90,
-         i.e. the map counter-rotates and stays world-fixed. */
-      var Adeg = 30, nu = 20 * D2R;
-      var dT = [Math.sin(nu)*Math.sin(Adeg*D2R), Math.sin(nu)*Math.cos(Adeg*D2R), -Math.cos(nu)];
-      var mr = qToMat(qFromEuler(90*D2R, 0, 0));
-      var dx = mr[0]*dT[0] + mr[3]*dT[1] + mr[6]*dT[2];
-      var dy = mr[1]*dT[0] + mr[4]*dT[1] + mr[7]*dT[2];
-      var dz = mr[2]*dT[0] + mr[5]*dT[1] + mr[8]*dT[2];
-      var gx = dx / -dz, gy = dy / -dz;
-      var ex = Math.tan(nu) * Math.sin((Adeg + 90) * D2R);
-      var ey = Math.tan(nu) * Math.cos((Adeg + 90) * D2R);
-      T('counter-rotation: +90° device = -90° on screen',
-        Math.abs(gx - ex) < 1e-9 && Math.abs(gy - ey) < 1e-9,
-        'got (' + gx.toFixed(4) + ', ' + gy.toFixed(4) + ') expected (' + ex.toFixed(4) + ', ' + ey.toFixed(4) + ')');
-
-      T('heading convention: α=90° ⇒ heading 270°',
-        Math.abs(headingOfMat(qToMat(qFromEuler(90*D2R, 0, 0))) - 270) < 1e-9,
-        headingOfMat(qToMat(qFromEuler(90*D2R, 0, 0))).toFixed(2) + '°');
-
-      var dp = destPoint(NY[0], NY[1], 0, 180);
-      T('destPoint: 180° due north of NY = antipode',
-        Math.abs(dp[0] - ap[0]) < 1e-6 && Math.abs(normLon(dp[1] - ap[1])) < 1e-6,
-        dp[0].toFixed(4) + ', ' + dp[1].toFixed(4));
-    } catch (err) {
-      T('self-test crashed', false, String(err && err.stack || err));
-    }
-    return res;
-  }
-
-  return {
-    CHARSET: CHARSET, COAST_DATA: COAST_DATA, CITIES: CITIES, TEST3: TEST3,
-    decodeCoastInt: decodeCoastInt, decodeCoast: decodeCoast, densify: densify,
-    enuBasis: enuBasis, dirFor: dirFor, buildDirs: buildDirs,
-    normLon: normLon, antipodeOf: antipodeOf, gcDistDeg: gcDistDeg, destPoint: destPoint,
-    qMul: qMul, qNorm: qNorm, qAxisZ: qAxisZ, qFromEuler: qFromEuler,
-    qSlerp: qSlerp, qToMat: qToMat, w3cMat: w3cMat, headingOfMat: headingOfMat,
-    runSelfTest: runSelfTest
-  };
-})();
-</script>
+<footer>
+  Hand-rolled projection math, no frameworks in the flagship app; coastlines from Natural Earth (public domain).
+  The view through the planet is deliberately mirrored relative to a wall map — you're reading the far
+  surface from the inside.
+</footer>
 
 <script>
-(function () {
 'use strict';
-var A = Antipode;
-var D2R = Math.PI / 180, R2D = 180 / Math.PI;
-function $(id) { return document.getElementById(id); }
-function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
-function norm180(d) { return ((d + 180) % 360 + 360) % 360 - 180; }
-
-var cv = $('cv'), ctx = cv.getContext('2d'), video = $('cam');
-var W = 0, H = 0;
-
-var S = {
-  lat: null, lon: null, aLat: null, aLon: null,
-  fov: 60, trim: 0, fA: false, fB: false, fG: false,
-  frozen: false,
-  qS: null, qT: null,           // smoothed / target orientation (device -> ENU)
-  headDelta: null,              // iOS compass yaw correction, degrees
-  compAcc: null, mode: 'none',  // 'compass' | 'absolute' | 'relative' | 'manual'
-  lastEvT: 0, lastAbsT: -1e9,
-  man: { on: false, yaw: 0, pitch: 0 },
-  dirs: null, cityDirs: null,
-  stream: null, started: false
+var RECS = {
+  phone: {
+    href: 'ar/', name: 'Antipode AR',
+    what: 'Grant camera + motion permission, point the phone at the ground, and see the far side of the Earth drawn on the live camera image, locked to the world as you move.',
+    also: [['window-imu/', 'Earth Window (no camera, IMU only)'], ['circle/', 'The Circle at Your Feet']]
+  },
+  laptop: {
+    href: 'window/', name: 'Earth Window — head-tracked',
+    what: 'Your webcam tracks your head and the screen becomes a window through the planet, with true parallax as you lean and move.',
+    also: [['circle/', 'The Circle at Your Feet'], ['fly/', 'Fly Through']]
+  },
+  monitor: {
+    href: 'fly/', name: 'Fly Through',
+    what: 'Free-fly a 3D Earth with WASD + mouse: follow a sight-line through the planet and out the other side.',
+    also: [['circle/', 'The Circle at Your Feet'], ['extras/day-night.html', 'Day / Night globe']]
+  },
+  none: {
+    href: 'circle/', name: 'The Circle at Your Feet',
+    what: 'No sensors needed. If the ground were a glass circle of radius r, how much of the far side could you see? A circle as wide as you are tall shows half the planet.',
+    also: [['aim/', 'Arm Aim calculator']]
+  }
 };
-
-/* Decode + densify once; d_ENU per vertex is rebuilt only on location change. */
-var coastDeg = A.densify(A.decodeCoast(A.COAST_DATA), 0.25);
-
-/* Rings of constant Theta (distance from antipode) are cones of nadir angle
-   nu = Theta/2 — location-independent, so precompute their direction fields. */
-function ringDirs(nuDeg) {
-  var nu = nuDeg * D2R, s = Math.sin(nu), c = Math.cos(nu);
-  var n = 181, a = new Float32Array(n * 3);
-  for (var i = 0; i < n; i++) {
-    var az = i * 2 * D2R;
-    a[i*3] = s * Math.sin(az); a[i*3+1] = s * Math.cos(az); a[i*3+2] = -c;
-  }
-  return a;
-}
-var RINGS = [30, 60, 90, 120, 150].map(function (th) { return { th: th, dirs: ringDirs(th / 2) }; });
-var HORIZON = ringDirs(90);
-
-/* ------------------------------------------------------------- location --- */
-function setLocation(lat, lon, why) {
-  S.lat = lat; S.lon = lon;
-  var ap = A.antipodeOf(lat, lon);
-  S.aLat = ap[0]; S.aLon = ap[1];
-  S.dirs = A.buildDirs(coastDeg, lat, lon);
-  var B = A.enuBasis(lat, lon);
-  S.cityDirs = A.CITIES.map(function (c) { return { c: c, d: A.dirFor(c.la, c.lo, B) }; });
-  $('lat').value = lat.toFixed(4); $('lon').value = lon.toFixed(4);
-  $('chipLoc').textContent = 'loc ' + fmtLL(lat, lon) + (why ? ' (' + why + ')' : '');
-  $('apInfo').textContent = 'antipode: ' + fmtLL(S.aLat, S.aLon);
-}
-function fmtLL(lat, lon) {
-  return Math.abs(lat).toFixed(2) + '°' + (lat >= 0 ? 'N' : 'S') + ' ' +
-         Math.abs(lon).toFixed(2) + '°' + (lon >= 0 ? 'E' : 'W');
-}
-
-/* ---------------------------------------------------------- orientation --- */
-function onOrient(ev, absSource) {
-  if (ev.alpha == null || ev.beta == null || ev.gamma == null) return;
-  var now = performance.now();
-  if (absSource) S.lastAbsT = now;
-  else if (now - S.lastAbsT < 1000) return;   // absolute stream is alive; ignore relative
-
-  var a = ev.alpha, b = ev.beta, g = ev.gamma;
-  if (S.fA) a = -a;
-  if (S.fB) b = -b;
-  if (S.fG) g = -g;
-  var qDev = A.qFromEuler(a * D2R, b * D2R, g * D2R);
-
-  var hasCompass = typeof ev.webkitCompassHeading === 'number' && ev.webkitCompassHeading >= 0;
-  if (hasCompass) {
-    /* iOS: alpha is referenced to an arbitrary start. Solve the yaw offset that
-       makes the device y-axis heading agree with webkitCompassHeading, applied
-       about the WORLD vertical. Skip the solve when the y-axis is near-vertical
-       (heading undefined) and reuse the last good offset. */
-    var m = A.qToMat(qDev);
-    if (Math.hypot(m[1], m[4]) > 0.05) {
-      S.headDelta = norm180(Math.atan2(m[1], m[4]) * R2D - ev.webkitCompassHeading);
-    }
-    if (S.headDelta != null) qDev = A.qMul(A.qAxisZ(S.headDelta * D2R), qDev);
-    S.compAcc = (typeof ev.webkitCompassAccuracy === 'number' && ev.webkitCompassAccuracy >= 0)
-      ? ev.webkitCompassAccuracy : null;
-    S.mode = 'compass';
-  } else {
-    S.mode = (absSource || ev.absolute === true) ? 'absolute' : 'relative';
-    S.compAcc = null;
-  }
-
-  var so = (screen.orientation && typeof screen.orientation.angle === 'number')
-    ? screen.orientation.angle : (window.orientation || 0);
-  var q = so ? A.qMul(qDev, A.qAxisZ(-so * D2R)) : qDev;
-
-  S.qT = q;
-  S.lastEvT = now;
-  S.man.on = false;
-}
-
-/* --------------------------------------------------------------- camera --- */
-function startCamera(deviceId) {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    note('no camera API — black background'); return;
-  }
-  if (S.stream) S.stream.getTracks().forEach(function (t) { t.stop(); });
-  var cons = deviceId
-    ? { video: { deviceId: { exact: deviceId } }, audio: false }
-    : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false };
-  navigator.mediaDevices.getUserMedia(cons).then(function (st) {
-    S.stream = st;
-    video.srcObject = st;
-    video.play().catch(function () {});
-    return navigator.mediaDevices.enumerateDevices();
-  }).then(function (devs) {
-    if (!devs) return;
-    var cams = devs.filter(function (d) { return d.kind === 'videoinput'; });
-    var cur = S.stream && S.stream.getVideoTracks()[0] &&
-              S.stream.getVideoTracks()[0].getSettings().deviceId;
-    var sel = $('camSel');
-    sel.innerHTML = '';
-    cams.forEach(function (d, i) {
-      var o = document.createElement('option');
-      o.value = d.deviceId;
-      o.textContent = d.label || ('camera ' + (i + 1));
-      if (d.deviceId === cur) o.selected = true;
-      sel.appendChild(o);
-    });
-  }).catch(function () {
-    note('camera unavailable — running on black background');
+var pick = document.getElementById('pick');
+function choose(d, scroll) {
+  var r = RECS[d];
+  document.querySelectorAll('.dev').forEach(function (b) {
+    b.classList.toggle('sel', b.dataset.d === d);
   });
+  pick.innerHTML =
+    '<a class="card" href="' + r.href + '"><span class="go">→</span>' +
+    '<div class="name">' + r.name + '</div><div class="what">' + r.what + '</div></a>' +
+    '<div class="also">also works here: ' +
+    r.also.map(function (a) { return '<a href="' + a[0] + '">' + a[1] + '</a>'; }).join(' ') + '</div>';
+  if (scroll) pick.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-
-/* ------------------------------------------------------------ rendering --- */
-function resize() {
-  var dpr = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth; H = window.innerHeight;
-  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-  cv.style.width = W + 'px'; cv.style.height = H + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-window.addEventListener('resize', resize);
-resize();
-
-/* Project one polyline of d_ENU dirs into the current path. Pen up when a
-   vertex leaves the front half-space, or when consecutive projected points
-   jump farther than 0.35 x canvas height (segments straddling the singular
-   horizon point would otherwise draw as chords across the screen). */
-function projectLine(d, m, F, cx, cy, wantAnchor) {
-  var jump2 = 0.35 * H; jump2 *= jump2;
-  var pen = false, lx = 0, ly = 0;
-  var ax = 0, ay = 0, ad = Infinity, found = false;
-  for (var i = 0; i < d.length; i += 3) {
-    var x = d[i], y = d[i+1], z = d[i+2];
-    var dz = m[2]*x + m[5]*y + m[8]*z;
-    if (dz > -0.02) { pen = false; continue; }
-    var inv = F / (-dz);
-    var sx = cx + (m[0]*x + m[3]*y + m[6]*z) * inv;
-    var sy = cy - (m[1]*x + m[4]*y + m[7]*z) * inv;
-    if (pen) {
-      var jx = sx - lx, jy = sy - ly;
-      if (jx*jx + jy*jy > jump2) pen = false;
-    }
-    if (!pen) { ctx.moveTo(sx, sy); pen = true; } else ctx.lineTo(sx, sy);
-    lx = sx; ly = sy;
-    if (wantAnchor && sx > 34 && sx < W - 34 && sy > 54 && sy < H - 54) {
-      var dd = (sx-cx)*(sx-cx) + (sy-cy)*(sy-cy);
-      if (dd < ad) { ad = dd; ax = sx; ay = sy; found = true; }
-    }
-  }
-  return found ? { x: ax, y: ay } : null;
-}
-
-function haloText(txt, x, y, fill, align) {
-  ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-  ctx.textAlign = align || 'left';
-  ctx.textBaseline = 'middle';
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-  ctx.strokeText(txt, x, y);
-  ctx.fillStyle = fill;
-  ctx.fillText(txt, x, y);
-}
-
-var lastHud = 0;
-function render(t) {
-  ctx.clearRect(0, 0, W, H);
-  if (!S.qS) {
-    haloText(S.started ? 'waiting for orientation…' : '', W/2, H/2 + 40, '#9fb8cc', 'center');
-    return;
-  }
-  var q = S.trim ? A.qMul(A.qAxisZ(S.trim * D2R), S.qS) : S.qS;
-  var m = A.qToMat(q);
-  var F = (H / 2) / Math.tan(S.fov * D2R / 2);
-  var cx = W / 2, cy = H / 2;
-
-  // Theta rings
-  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
-  ctx.lineWidth = 1;
-  var anchors = [];
-  for (var r = 0; r < RINGS.length; r++) {
-    ctx.beginPath();
-    anchors[r] = projectLine(RINGS[r].dirs, m, F, cx, cy, true);
-    ctx.stroke();
-  }
-  for (var r2 = 0; r2 < RINGS.length; r2++) {
-    if (anchors[r2])
-      haloText('Θ ' + RINGS[r2].th + '°', anchors[r2].x + 5, anchors[r2].y - 8, 'rgba(255,255,255,0.55)');
-  }
-
-  // horizon = the observer's own position, smeared over every azimuth
-  ctx.strokeStyle = 'rgba(255,179,71,0.85)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  var ha = projectLine(HORIZON, m, F, cx, cy, true);
-  ctx.stroke();
-  if (ha) haloText('horizon — your own position, every direction', ha.x + 5, ha.y - 9, 'rgba(255,190,110,0.9)');
-
-  // coastlines
-  if (S.dirs) {
-    ctx.strokeStyle = '#8fd8ff';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    for (var i = 0; i < S.dirs.length; i++) projectLine(S.dirs[i], m, F, cx, cy, false);
-    ctx.stroke();
-  }
-
-  // cities
-  if (S.cityDirs) {
-    for (var c = 0; c < S.cityDirs.length; c++) {
-      var e = S.cityDirs[c], d = e.d;
-      var dz = m[2]*d[0] + m[5]*d[1] + m[8]*d[2];
-      if (dz > -0.02) continue;
-      var inv = F / (-dz);
-      var sx = cx + (m[0]*d[0] + m[3]*d[1] + m[6]*d[2]) * inv;
-      var sy = cy - (m[1]*d[0] + m[4]*d[1] + m[7]*d[2]) * inv;
-      if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
-      ctx.fillStyle = '#ffe08a';
-      ctx.beginPath(); ctx.arc(sx, sy, 2.4, 0, 6.2832); ctx.fill();
-      haloText(e.c.n, sx + 6, sy - 6, '#ffe08a');
-    }
-  }
-
-  // nadir reticle = the exact antipode
-  var ndz = -m[8];
-  if (ndz < -0.02) {
-    var ninv = F / (-ndz);
-    var nx = cx + (-m[6]) * ninv, ny = cy - (-m[7]) * ninv;
-    ctx.strokeStyle = '#7fffb0';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(nx, ny, 13, 0, 6.2832); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(nx - 21, ny); ctx.lineTo(nx - 7, ny);
-    ctx.moveTo(nx + 7, ny);  ctx.lineTo(nx + 21, ny);
-    ctx.moveTo(nx, ny - 21); ctx.lineTo(nx, ny - 7);
-    ctx.moveTo(nx, ny + 7);  ctx.lineTo(nx, ny + 21);
-    ctx.stroke();
-    haloText('ANTIPODE', nx, ny + 32, '#7fffb0', 'center');
-    if (S.lat != null) haloText(fmtLL(S.aLat, S.aLon), nx, ny + 46, '#7fffb0', 'center');
-  }
-
-  // fixed screen-center cross (where the readout samples)
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cx - 7, cy); ctx.lineTo(cx + 7, cy);
-  ctx.moveTo(cx, cy - 7); ctx.lineTo(cx, cy + 7);
-  ctx.stroke();
-
-  if (t - lastHud > 150) { lastHud = t; updateHud(m); }
-}
-
-function updateHud(m) {
-  var nu = Math.acos(clamp(m[8], -1, 1)) * R2D;
-  var ro = $('roMain'), rs = $('roSub');
-  if (nu > 90.5) {
-    ro.textContent = 'ν ' + nu.toFixed(1) + '° — above the horizon';
-    rs.textContent = 'the far side of the Earth is below you — aim down';
-  } else {
-    var th = 2 * nu;
-    ro.textContent = 'ν ' + nu.toFixed(1) + '° · Θ ' + th.toFixed(1) + '° from antipode';
-    if (S.lat != null) {
-      var brg = (Math.atan2(-m[2], -m[5]) * R2D % 360 + 360) % 360;
-      var far = A.destPoint(S.lat, S.lon, brg, 180 - th);
-      var best = null, bd = 1e9;
-      for (var i = 0; i < A.CITIES.length; i++) {
-        var c = A.CITIES[i];
-        var dd = A.gcDistDeg(far[0], far[1], c.la, c.lo);
-        if (dd < bd) { bd = dd; best = c; }
-      }
-      rs.textContent = 'center: ' + fmtLL(far[0], far[1]) +
-        (best ? ' · ' + best.n + ' ' + Math.round(bd * 111.19) + ' km' : '');
-    } else {
-      rs.textContent = 'set location (⚙) to draw coastlines';
-    }
-  }
-  var hc = $('chipHead');
-  if (S.mode === 'compass')
-    hc.textContent = 'compass' + (S.compAcc != null ? ' ±' + Math.round(S.compAcc) + '°' : '') +
-      (S.trim ? ' · trim ' + S.trim + '°' : '');
-  else if (S.mode === 'absolute')
-    hc.textContent = 'heading: absolute' + (S.trim ? ' · trim ' + S.trim + '°' : '');
-  else if (S.mode === 'relative')
-    hc.textContent = 'heading: RELATIVE — align with trim slider';
-  else if (S.mode === 'manual')
-    hc.textContent = 'manual — drag to look, scroll = FOV';
-  else hc.textContent = 'heading: —';
-}
-
-/* ------------------------------------------------------------ main loop --- */
-var prevT = performance.now();
-function frame(t) {
-  var dt = Math.min((t - prevT) / 1000, 0.1);
-  prevT = t;
-  if (S.started && !S.man.on && t - S.lastEvT > 2500 && S.mode === 'none') {
-    S.man.on = true; S.mode = 'manual';   // no sensors (desktop): drag to look
-  }
-  if (S.man.on) S.qT = A.qFromEuler(S.man.yaw * D2R, S.man.pitch * D2R, 0);
-  if (!S.frozen && S.qT) {
-    /* exponential smoothing, tau ~ 0.15 s: kills compass shiver without
-       adding perceptible lag — this is what makes the overlay feel locked */
-    S.qS = S.qS ? A.qSlerp(S.qS, S.qT, 1 - Math.exp(-dt / 0.15)) : S.qT.slice();
-  }
-  render(t);
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-
-/* -------------------------------------------------------------- controls --- */
-var noteTimer = null;
-function note(msg) {
-  var n = $('note');
-  n.textContent = msg;
-  n.style.display = 'block';
-  clearTimeout(noteTimer);
-  noteTimer = setTimeout(function () { n.style.display = 'none'; }, 6000);
-}
-
-$('fov').addEventListener('input', function () {
-  S.fov = +this.value; $('fovVal').textContent = this.value + '°';
+document.querySelectorAll('.dev').forEach(function (b) {
+  b.addEventListener('click', function () { choose(b.dataset.d, true); });
 });
-$('opacity').addEventListener('input', function () {
-  video.style.opacity = this.value / 100; $('opVal').textContent = this.value + '%';
-});
-$('trim').addEventListener('input', function () {
-  S.trim = +this.value; $('trimVal').textContent = this.value + '°';
-});
-$('trimZero').addEventListener('click', function () {
-  S.trim = 0; $('trim').value = 0; $('trimVal').textContent = '0°';
-});
-$('fA').addEventListener('change', function () { S.fA = this.checked; });
-$('fB').addEventListener('change', function () { S.fB = this.checked; });
-$('fG').addEventListener('change', function () { S.fG = this.checked; });
-$('locApply').addEventListener('click', function () {
-  var la = parseFloat($('lat').value), lo = parseFloat($('lon').value);
-  if (isFinite(la) && isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180)
-    setLocation(la, lo, 'manual');
-  else note('enter lat in [-90,90], lon in [-180,180]');
-});
-$('locGps').addEventListener('click', function () { requestGeo(); });
-$('camSel').addEventListener('change', function () { startCamera(this.value); });
-$('gearBtn').addEventListener('click', function () { $('panel').classList.toggle('hidden'); });
-$('panelClose').addEventListener('click', function () { $('panel').classList.add('hidden'); });
-$('freezeBtn').addEventListener('click', function () {
-  S.frozen = !S.frozen;
-  this.classList.toggle('on', S.frozen);
-  $('chipFroze').classList.toggle('hidden', !S.frozen);
-});
-$('runTest').addEventListener('click', function () {
-  var res = A.runSelfTest();
-  var out = $('testOut');
-  out.innerHTML = '';
-  var passCount = 0;
-  res.forEach(function (r) {
-    if (r.pass) passCount++;
-    var line = document.createElement('span');
-    line.className = r.pass ? 'ok' : 'bad';
-    line.textContent = (r.pass ? '✓ ' : '✗ ') + r.name +
-      (r.detail ? '  — ' + r.detail : '') + '\n';
-    out.appendChild(line);
-  });
-  var sum = document.createElement('span');
-  sum.className = passCount === res.length ? 'ok' : 'bad';
-  sum.textContent = '\n' + passCount + '/' + res.length + ' passed\n';
-  out.appendChild(sum);
-  $('testPanel').classList.remove('hidden');
-});
-$('testClose').addEventListener('click', function () { $('testPanel').classList.add('hidden'); });
-
-function requestGeo() {
-  if (!navigator.geolocation) { note('no geolocation — set location manually'); return; }
-  navigator.geolocation.getCurrentPosition(
-    function (p) { setLocation(p.coords.latitude, p.coords.longitude, 'GPS'); },
-    function () {
-      note('location unavailable — set it manually in ⚙');
-      $('panel').classList.remove('hidden');
-    },
-    { timeout: 12000, maximumAge: 600000 });
-}
-
-/* -------------------------------------------------- drag fallback + wheel --- */
-var drag = null;
-cv.addEventListener('pointerdown', function (e) {
-  drag = { x: e.clientX, y: e.clientY };
-  try { cv.setPointerCapture(e.pointerId); } catch (err) {}
-});
-cv.addEventListener('pointermove', function (e) {
-  if (!drag || !S.man.on) return;
-  S.man.yaw = (S.man.yaw + (e.clientX - drag.x) * 0.25) % 360;
-  S.man.pitch = clamp(S.man.pitch - (e.clientY - drag.y) * 0.25, -20, 160);
-  drag = { x: e.clientX, y: e.clientY };
-});
-cv.addEventListener('pointerup', function () { drag = null; });
-cv.addEventListener('pointercancel', function () { drag = null; });
-window.addEventListener('wheel', function (e) {
-  S.fov = clamp(S.fov + e.deltaY * 0.02, 40, 130);
-  $('fov').value = Math.round(S.fov);
-  $('fovVal').textContent = Math.round(S.fov) + '°';
-}, { passive: true });
-
-/* ----------------------------------------------------------------- start --- */
-$('startBtn').addEventListener('click', function () {
-  $('startOverlay').classList.add('hidden');
-  S.started = true;
-  S.lastEvT = performance.now();   // give real sensors 2.5 s before manual mode
-
-  var attach = function () {
-    window.addEventListener('deviceorientationabsolute', function (e) { onOrient(e, true); });
-    window.addEventListener('deviceorientation', function (e) { onOrient(e, false); });
-  };
-  if (window.DeviceOrientationEvent &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(function (st) {
-      if (st !== 'granted') note('motion denied — drag to look around');
-      attach();
-    }).catch(function () { note('motion permission error — drag to look'); attach(); });
-  } else {
-    attach();
-  }
-  startCamera();
-  requestGeo();
-});
-})();
+/* preselect a likely device; the buttons remain one tap away */
+var touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+var small = Math.min(screen.width, screen.height) < 900;
+choose(touch && small ? 'phone' : touch ? 'phone' : 'laptop', false);
 </script>
 </body>
 </html>

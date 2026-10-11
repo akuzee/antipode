@@ -7,7 +7,7 @@ import { readFileSync } from 'fs';
 import vm from 'vm';
 
 const here = new URL('.', import.meta.url).pathname;
-const html = readFileSync(here + '../index.html', 'utf8');
+const html = readFileSync(here + '../ar/index.html', 'utf8');
 
 const m = html.match(/<script id="core">([\s\S]*?)<\/script>/);
 if (!m) { console.error('core script block not found'); process.exit(1); }

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continental Globe - Detailed</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0a0a14;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .toggle-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .toggle-btn.active {
+            background: rgba(78, 205, 196, 0.3);
+            border-color: #4ecdc4;
+        }
+        
+        #version-badge {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(78, 205, 196, 0.2);
+            border: 1px solid rgba(78, 205, 196, 0.4);
+            color: #4ecdc4;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            pointer-events: none;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 16px;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top-color: #4ecdc4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="loading">
+        <div class="spinner"></div>
+        Loading high-detail map...
+    </div>
+    <div id="version-badge">High Detail</div>
+    <div id="controls">
+        <button class="toggle-btn" id="bordersBtn">Show Borders</button>
+    </div>
+    <div id="info">Click and drag to rotate</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js"></script>
+    
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            globeRadius: 5,
+            backgroundColor: 0x0a0a14,
+            showBorders: false,
+            borderColor: 0x1a1a2a,
+            autoRotate: false,
+            autoRotateSpeed: 0.002,
+            enableZoom: false
+        };
+
+        // ============================================
+        // ENHANCED BIOME/TERRAIN COLOR SYSTEM
+        // ============================================
+        
+        // More refined color palette
+        const BIOME_COLORS = {
+            // Tundra & Arctic
+            tundra: [0xb8c4a8, 0xa8b498, 0x98a488],
+            ice: [0xf0f4f8, 0xe8ecf0, 0xdce0e4],
+            
+            // Boreal/Taiga forests
+            taiga: [0x2d4a32, 0x3a5840, 0x28422d],
+            
+            // Temperate forests
+            temperate_forest: [0x3d6b3d, 0x4a7a4a, 0x2d5a2d],
+            temperate_mixed: [0x4a7a42, 0x5a8a52, 0x3a6a32],
+            
+            // Mediterranean
+            mediterranean: [0x6b8a4a, 0x7a9a5a, 0x5a7a3a],
+            
+            // Grassland/Steppe
+            grassland: [0x8aad6a, 0x9abd7a, 0x7a9d5a],
+            steppe: [0xa8b87a, 0xb8c88a, 0x98a86a],
+            
+            // Desert & Arid
+            hot_desert: [0xc4a882, 0xd4b892, 0xb49872],
+            cold_desert: [0x9a8a7a, 0xaa9a8a, 0x8a7a6a],
+            semi_arid: [0xb4a070, 0xc4b080, 0xa49060],
+            
+            // Tropical
+            tropical_rainforest: [0x1a6b1a, 0x2a7b2a, 0x0a5b0a],
+            tropical_seasonal: [0x2a8a2a, 0x3a9a3a, 0x1a7a1a],
+            savanna: [0x8a9a4a, 0x9aaa5a, 0x7a8a3a],
+            
+            // Highlands/Mountains
+            highlands: [0x6a7a5a, 0x7a8a6a, 0x5a6a4a],
+            alpine: [0x8a9a8a, 0x9aaa9a, 0x7a8a7a]
+        };
+
+        // Geographic regions for more accurate biome assignment
+        const BIOME_REGIONS = [
+            // Ice caps
+            { name: 'arctic', latMin: 75, latMax: 90, lonMin: -180, lonMax: 180, biome: 'ice' },
+            { name: 'antarctic', latMin: -90, latMax: -60, lonMin: -180, lonMax: 180, biome: 'ice' },
+            { name: 'greenland', latMin: 60, latMax: 84, lonMin: -75, lonMax: -10, biome: 'ice' },
+            
+            // Tundra
+            { name: 'siberian_tundra', latMin: 65, latMax: 75, lonMin: 60, lonMax: 180, biome: 'tundra' },
+            { name: 'canadian_tundra', latMin: 65, latMax: 75, lonMin: -140, lonMax: -60, biome: 'tundra' },
+            { name: 'scandinavian_tundra', latMin: 68, latMax: 72, lonMin: 5, lonMax: 30, biome: 'tundra' },
+            
+            // Taiga/Boreal
+            { name: 'siberian_taiga', latMin: 50, latMax: 65, lonMin: 60, lonMax: 160, biome: 'taiga' },
+            { name: 'canadian_taiga', latMin: 50, latMax: 65, lonMin: -140, lonMax: -50, biome: 'taiga' },
+            { name: 'scandinavian_taiga', latMin: 60, latMax: 68, lonMin: 5, lonMax: 40, biome: 'taiga' },
+            
+            // Hot Deserts
+            { name: 'sahara', latMin: 15, latMax: 35, lonMin: -17, lonMax: 35, biome: 'hot_desert' },
+            { name: 'arabian', latMin: 15, latMax: 32, lonMin: 35, lonMax: 60, biome: 'hot_desert' },
+            { name: 'australian_outback', latMin: -30, latMax: -18, lonMin: 120, lonMax: 145, biome: 'hot_desert' },
+            { name: 'kalahari', latMin: -28, latMax: -18, lonMin: 18, lonMax: 28, biome: 'semi_arid' },
+            { name: 'sonoran', latMin: 25, latMax: 35, lonMin: -118, lonMax: -105, biome: 'hot_desert' },
+            { name: 'atacama', latMin: -30, latMax: -18, lonMin: -72, lonMax: -68, biome: 'hot_desert' },
+            
+            // Cold Deserts
+            { name: 'gobi', latMin: 38, latMax: 48, lonMin: 90, lonMax: 120, biome: 'cold_desert' },
+            { name: 'patagonian', latMin: -52, latMax: -40, lonMin: -72, lonMax: -65, biome: 'cold_desert' },
+            { name: 'central_asian', latMin: 35, latMax: 48, lonMin: 55, lonMax: 85, biome: 'semi_arid' },
+            
+            // Tropical Rainforest
+            { name: 'amazon', latMin: -15, latMax: 5, lonMin: -80, lonMax: -45, biome: 'tropical_rainforest' },
+            { name: 'congo', latMin: -8, latMax: 5, lonMin: 10, lonMax: 32, biome: 'tropical_rainforest' },
+            { name: 'southeast_asian_rf', latMin: -8, latMax: 8, lonMin: 95, lonMax: 140, biome: 'tropical_rainforest' },
+            
+            // Savanna
+            { name: 'african_savanna_n', latMin: 5, latMax: 15, lonMin: -17, lonMax: 45, biome: 'savanna' },
+            { name: 'african_savanna_s', latMin: -18, latMax: -5, lonMin: 15, lonMax: 42, biome: 'savanna' },
+            { name: 'brazilian_cerrado', latMin: -22, latMax: -5, lonMin: -60, lonMax: -42, biome: 'savanna' },
+            { name: 'australian_savanna', latMin: -20, latMax: -12, lonMin: 125, lonMax: 145, biome: 'savanna' },
+            
+            // Mediterranean
+            { name: 'mediterranean_europe', latMin: 35, latMax: 45, lonMin: -10, lonMax: 40, biome: 'mediterranean' },
+            { name: 'california', latMin: 32, latMax: 42, lonMin: -125, lonMax: -115, biome: 'mediterranean' },
+            { name: 'chile_med', latMin: -40, latMax: -30, lonMin: -75, lonMax: -70, biome: 'mediterranean' },
+            { name: 'south_africa_cape', latMin: -35, latMax: -30, lonMin: 18, lonMax: 28, biome: 'mediterranean' },
+            { name: 'sw_australia', latMin: -38, latMax: -30, lonMin: 114, lonMax: 125, biome: 'mediterranean' },
+            
+            // Temperate Forests
+            { name: 'eastern_us', latMin: 30, latMax: 48, lonMin: -95, lonMax: -70, biome: 'temperate_forest' },
+            { name: 'western_europe', latMin: 45, latMax: 60, lonMin: -10, lonMax: 20, biome: 'temperate_mixed' },
+            { name: 'eastern_china', latMin: 25, latMax: 45, lonMin: 105, lonMax: 125, biome: 'temperate_forest' },
+            { name: 'japan', latMin: 30, latMax: 45, lonMin: 128, lonMax: 145, biome: 'temperate_forest' },
+            { name: 'new_zealand', latMin: -48, latMax: -34, lonMin: 165, lonMax: 180, biome: 'temperate_forest' },
+            { name: 'tasmania', latMin: -44, latMax: -40, lonMin: 144, lonMax: 150, biome: 'temperate_forest' },
+            
+            // Grassland/Steppe
+            { name: 'great_plains', latMin: 32, latMax: 50, lonMin: -110, lonMax: -95, biome: 'grassland' },
+            { name: 'pampas', latMin: -40, latMax: -28, lonMin: -68, lonMax: -55, biome: 'grassland' },
+            { name: 'eurasian_steppe', latMin: 45, latMax: 55, lonMin: 25, lonMax: 90, biome: 'steppe' },
+            
+            // Highlands
+            { name: 'tibetan_plateau', latMin: 28, latMax: 40, lonMin: 75, lonMax: 105, biome: 'highlands' },
+            { name: 'andes_high', latMin: -35, latMax: -15, lonMin: -72, lonMax: -65, biome: 'highlands' },
+            { name: 'ethiopian_highlands', latMin: 5, latMax: 15, lonMin: 35, lonMax: 45, biome: 'highlands' },
+            
+            // Tropical seasonal
+            { name: 'india_seasonal', latMin: 8, latMax: 28, lonMin: 68, lonMax: 90, biome: 'tropical_seasonal' },
+            { name: 'indochina', latMin: 10, latMax: 25, lonMin: 95, lonMax: 110, biome: 'tropical_seasonal' }
+        ];
+
+        // ============================================
+        // SCENE SETUP
+        // ============================================
+        let scene, camera, renderer, controls;
+        let globe, bordersGroup;
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(CONFIG.backgroundColor);
+            
+            camera = new THREE.PerspectiveCamera(
+                45,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.z = 14;
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.rotateSpeed = 0.5;
+            controls.enableZoom = CONFIG.enableZoom;
+            controls.enablePan = false;
+            
+            // Enhanced lighting for detail
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            mainLight.position.set(5, 3, 5);
+            scene.add(mainLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x88aaff, 0.15);
+            fillLight.position.set(-5, 0, -3);
+            scene.add(fillLight);
+            
+            const rimLight = new THREE.DirectionalLight(0x4ecdc4, 0.2);
+            rimLight.position.set(0, -5, 0);
+            scene.add(rimLight);
+            
+            globe = new THREE.Group();
+            bordersGroup = new THREE.Group();
+            bordersGroup.visible = CONFIG.showBorders;
+            scene.add(globe);
+            scene.add(bordersGroup);
+            
+            window.addEventListener('resize', onWindowResize);
+            document.getElementById('bordersBtn').addEventListener('click', toggleBorders);
+        }
+
+        function toggleBorders() {
+            CONFIG.showBorders = !CONFIG.showBorders;
+            bordersGroup.visible = CONFIG.showBorders;
+            document.getElementById('bordersBtn').classList.toggle('active', CONFIG.showBorders);
+            document.getElementById('bordersBtn').textContent = 
+                CONFIG.showBorders ? 'Hide Borders' : 'Show Borders';
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ============================================
+        // COORDINATE CONVERSION
+        // ============================================
+        
+        function latLongToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            
+            return new THREE.Vector3(
+                -radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.cos(phi),
+                radius * Math.sin(phi) * Math.sin(theta)
+            );
+        }
+
+        // ============================================
+        // BIOME COLOR DETERMINATION
+        // ============================================
+        
+        function getBiomeColor(lat, lon) {
+            // Check specific regions first
+            for (const region of BIOME_REGIONS) {
+                if (lat >= region.latMin && lat <= region.latMax &&
+                    lon >= region.lonMin && lon <= region.lonMax) {
+                    const colors = BIOME_COLORS[region.biome];
+                    // Add slight variation within biome
+                    const variation = (Math.sin(lat * 5) + Math.cos(lon * 5)) * 0.5 + 0.5;
+                    const colorIndex = Math.floor(variation * colors.length) % colors.length;
+                    return colors[colorIndex];
+                }
+            }
+            
+            // Fallback based on latitude bands
+            const absLat = Math.abs(lat);
+            
+            if (absLat > 75) {
+                return BIOME_COLORS.ice[0];
+            } else if (absLat > 60) {
+                return BIOME_COLORS.tundra[Math.floor(Math.random() * 3)];
+            } else if (absLat > 45) {
+                return BIOME_COLORS.temperate_mixed[Math.floor(Math.random() * 3)];
+            } else if (absLat > 25) {
+                return BIOME_COLORS.grassland[Math.floor(Math.random() * 3)];
+            } else if (absLat > 10) {
+                return BIOME_COLORS.tropical_seasonal[Math.floor(Math.random() * 3)];
+            } else {
+                return BIOME_COLORS.tropical_rainforest[Math.floor(Math.random() * 3)];
+            }
+        }
+
+        // ============================================
+        // GEOMETRY CREATION
+        // ============================================
+        
+        function createCountryMesh(coordinates, properties) {
+            const countryGroup = new THREE.Group();
+            
+            coordinates.forEach(ring => {
+                if (!ring || ring.length < 3) return;
+                
+                // Calculate centroid
+                let centerLat = 0, centerLon = 0;
+                ring.forEach(coord => {
+                    centerLon += coord[0];
+                    centerLat += coord[1];
+                });
+                centerLat /= ring.length;
+                centerLon /= ring.length;
+                
+                const color = getBiomeColor(centerLat, centerLon);
+                
+                // Triangulate
+                const flatPoints = [];
+                ring.forEach(coord => {
+                    flatPoints.push(coord[0], coord[1]);
+                });
+                
+                let triangleIndices;
+                try {
+                    triangleIndices = earcut(flatPoints);
+                } catch (e) {
+                    return;
+                }
+                
+                if (triangleIndices.length < 3) return;
+                
+                // Build 3D vertices
+                const vertices = [];
+                ring.forEach(coord => {
+                    const v = latLongToVector3(coord[1], coord[0], CONFIG.globeRadius);
+                    vertices.push(v.x, v.y, v.z);
+                });
+                
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geometry.setIndex(triangleIndices);
+                geometry.computeVertexNormals();
+                
+                const material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    side: THREE.DoubleSide,
+                    flatShading: false,
+                    shininess: 5
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                countryGroup.add(mesh);
+                
+                // Border line
+                const borderPoints = ring.map(coord => 
+                    latLongToVector3(coord[1], coord[0], CONFIG.globeRadius + 0.008)
+                );
+                
+                const borderGeometry = new THREE.BufferGeometry().setFromPoints(borderPoints);
+                const borderMaterial = new THREE.LineBasicMaterial({ 
+                    color: 0x2a3040,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const borderLine = new THREE.LineLoop(borderGeometry, borderMaterial);
+                bordersGroup.add(borderLine);
+            });
+            
+            return countryGroup;
+        }
+
+        // ============================================
+        // GEOJSON LOADING - HIGHER RESOLUTION
+        // ============================================
+        
+        async function loadGeoJSON() {
+            // Try 50m resolution first (more detailed)
+            const sources = [
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson',
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+            ];
+            
+            for (const url of sources) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        console.log('Loaded:', url);
+                        return await response.json();
+                    }
+                } catch (e) {
+                    console.warn('Failed:', url);
+                }
+            }
+            
+            throw new Error('All sources failed');
+        }
+
+        function processGeoJSON(geojson) {
+            let processed = 0;
+            const total = geojson.features.length;
+            
+            geojson.features.forEach((feature, idx) => {
+                const geometry = feature.geometry;
+                const properties = feature.properties || {};
+                
+                if (geometry.type === 'Polygon') {
+                    const mesh = createCountryMesh(geometry.coordinates, properties);
+                    if (mesh) globe.add(mesh);
+                } else if (geometry.type === 'MultiPolygon') {
+                    geometry.coordinates.forEach(polygon => {
+                        const mesh = createCountryMesh(polygon, properties);
+                        if (mesh) globe.add(mesh);
+                    });
+                }
+                
+                processed++;
+            });
+            
+            console.log(`Processed ${processed} features`);
+        }
+
+        // ============================================
+        // ANIMATION
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (CONFIG.autoRotate) {
+                globe.rotation.y += CONFIG.autoRotateSpeed;
+                bordersGroup.rotation.y += CONFIG.autoRotateSpeed;
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        async function init() {
+            initScene();
+            
+            try {
+                const geojson = await loadGeoJSON();
+                processGeoJSON(geojson);
+                document.getElementById('loading').style.display = 'none';
+                animate();
+            } catch (error) {
+                console.error('Init failed:', error);
+                document.getElementById('loading').innerHTML = 'Failed to load. Check console.';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
+

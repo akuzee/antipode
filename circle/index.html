@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Circle at Your Feet</title>
+<style>
+  :root {
+    --fg: #dfe9f0; --dim: #9fb8cc; --faint: #5a7186;
+    --line: rgba(120,160,200,.28); --panel: rgba(8,12,18,.62);
+    --glow: #7fd4ff; --warm: #ffc46b; --cap: rgba(127,212,255,.10);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:#000; color:var(--fg);
+    font: 15px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  body { padding: 18px 16px 40px; max-width: 1060px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 2px; font-weight: 650; letter-spacing:.2px; }
+  .q { color: var(--dim); margin: 0 0 16px; max-width: 64ch; }
+  a { color: var(--glow); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  .controls { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:flex-end;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:14px; }
+  .ctl { display:flex; flex-direction:column; gap:3px; }
+  .ctl label { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.6px; }
+  .ctl .val { font-family:ui-monospace,Menlo,monospace; font-size:14px; }
+  input[type=range] { width: 230px; accent-color: var(--glow); }
+  input[type=number], input[type=text] { background:rgba(255,255,255,.06); color:var(--fg);
+    border:1px solid var(--line); border-radius:7px; padding:4px 7px; width:86px;
+    font-family:ui-monospace,Menlo,monospace; font-size:13px; }
+  button, .chipbtn { background:rgba(255,255,255,.06); color:var(--fg); border:1px solid var(--line);
+    border-radius:8px; padding:4px 10px; font-size:12.5px; cursor:pointer; }
+  button:hover, .chipbtn:hover { background:rgba(127,212,255,.14); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 16px; }
+  .chipbtn small { color:var(--faint); margin-left:5px; }
+  .chipbtn.hot { border-color: var(--warm); }
+
+  .panels { display:grid; grid-template-columns: minmax(300px,480px) minmax(300px,1fr); gap:16px; }
+  @media (max-width: 820px) { .panels { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; }
+  .panel h2 { font-size:12px; color:var(--dim); margin:2px 4px 8px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.7px; }
+  svg text { font: 12px ui-monospace, Menlo, monospace; fill: var(--dim); }
+  canvas { display:block; width:100%; height:auto; border-radius:8px; }
+
+  .readouts { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:16px 0; }
+  .ro { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 11px; }
+  .ro .k { font-size:10.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.6px; }
+  .ro .v { font-family:ui-monospace,Menlo,monospace; font-size:17px; margin-top:2px; }
+  .ro .v small { font-size:11px; color:var(--dim); }
+  .ro.big .v { color:var(--glow); font-size:21px; }
+  #fact { min-height:22px; color:var(--warm); font-size:13.5px; margin:-6px 2px 14px; }
+
+  #citybox { margin-top:14px; }
+  #citylist { display:flex; flex-wrap:wrap; gap:6px; }
+  .city { background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:999px;
+    padding:3px 10px; font-size:12.5px; cursor:pointer; }
+  .city b { font-weight:600; } .city small { color:var(--faint); }
+  .city.sel { border-color:var(--warm); color:var(--warm); }
+  .city.out { opacity:.45; }
+  #inverse { margin-top:9px; font-size:13.5px; color:var(--dim); min-height:20px; }
+  #inverse b { color:var(--warm); font-family:ui-monospace,Menlo,monospace; }
+
+  details { margin-top:20px; border:1px solid var(--line); border-radius:10px;
+    background:var(--panel); padding:9px 14px; max-width:74ch; }
+  summary { cursor:pointer; color:var(--dim); font-size:13.5px; }
+  details p { font-size:13.5px; color:var(--dim); }
+  footer { margin-top:26px; font-size:13px; color:var(--faint); }
+</style>
+</head>
+<body>
+
+<h1>The Circle at Your Feet</h1>
+<p class="q">If the ground were a glass window — a circle of radius <span class="mono">r</span> centered
+at your feet, Earth transparent below — how much of the far side of the planet could you see through it?</p>
+
+<div class="controls">
+  <div class="ctl">
+    <label>Window radius <span id="rVal" class="val"></span></label>
+    <input type="range" id="rSlider" min="0" max="1000" value="372">
+  </div>
+  <div class="ctl">
+    <label>Eye height</label>
+    <span><input type="number" id="hIn" step="0.01" min="0.2"> <span id="hUnit" class="mono"></span></span>
+  </div>
+  <div class="ctl">
+    <label>Units</label>
+    <button id="unitBtn">metric ⇄ feet</button>
+  </div>
+  <div class="ctl">
+    <label>You are at (lat, lon)</label>
+    <span>
+      <input type="text" id="latIn" style="width:72px"> <input type="text" id="lonIn" style="width:72px">
+      <button id="gpsBtn" title="Use device location">📍</button>
+    </span>
+  </div>
+</div>
+
+<div class="chips" id="presets"></div>
+<div id="fact"></div>
+
+<div class="panels">
+  <div class="panel">
+    <h2>Cross-section — the cone of sight</h2>
+    <svg id="xsec" viewBox="0 0 480 560" aria-label="Globe cross-section with sight cone"></svg>
+  </div>
+  <div class="panel">
+    <h2>The far side you can see <span id="mapWhere" style="text-transform:none"></span></h2>
+    <canvas id="map" width="900" height="900"></canvas>
+  </div>
+</div>
+
+<div class="readouts">
+  <div class="ro big"><div class="k">Share of Earth's surface</div><div class="v" id="roPct"></div></div>
+  <div class="ro"><div class="k">Cone half-angle <span style="text-transform:none">ν</span></div><div class="v" id="roNu"></div></div>
+  <div class="ro"><div class="k">Visible cap radius Θ</div><div class="v" id="roTh"></div></div>
+  <div class="ro"><div class="k">Cap radius on the ground</div><div class="v" id="roS"></div></div>
+  <div class="ro"><div class="k">You see everything farther than</div><div class="v" id="roD"></div></div>
+  <div class="ro"><div class="k">Visible area</div><div class="v" id="roA"></div></div>
+</div>
+
+<div id="citybox">
+  <h2 style="font-size:12px;color:var(--dim);margin:0 0 7px;text-transform:uppercase;letter-spacing:.7px">
+    Cities in the window — <span id="cityCount"></span> <span style="text-transform:none">(click one to size the window for it)</span></h2>
+  <div id="citylist"></div>
+  <div id="inverse"></div>
+</div>
+
+<details>
+  <summary>Why the window shows double its angle — and why walking around changes nothing</summary>
+  <p><b>Θ = 2ν.</b> Your sight line is a chord of the sphere. A chord leaving you at angle ν from the
+  vertical diameter (the line through you, the center, and your antipode) lands on the far surface at
+  arc distance 2ν from the antipode — the inscribed angle theorem: an angle with its vertex on a circle
+  subtends twice itself at the center. So a window spanning ν = 45° to each side (radius = eye height)
+  shows a cap of Θ = 90°, which is exactly half the Earth's surface: a circle as wide as you are tall
+  shows you half the planet.</p>
+  <p><b>Position doesn't matter, only the window.</b> The far surface is ~12,742 km away; stepping 10 m
+  sideways changes the direction to any far-side point by less than an arcsecond. The visible cap is
+  pinned by the window's angular size alone — which is why the companion AR app needs no positional
+  tracking at all.</p>
+  <p><b>The map is mirrored.</b> You are reading the far surface from the inside, so east and west swap
+  relative to a wall map. Perth sits northeast of New York's antipode but appears to the <i>west</i>.
+  That is correct, and the map above shares the convention of the AR app.</p>
+</details>
+
+<footer>
+  Part of <a href="../">Antipode</a> — see it live on your phone with the
+  <a href="../ar/">camera AR app</a>. Coastlines: Natural Earth 110m (public domain).
+</footer>
+
+<script>
+'use strict';
+/* ============================== shared data ==============================
+   COAST_DATA / CHARSET / decoder are byte-identical to ../ar/index.html.   */
+var COAST_DATA = 'r*|(3;U+*A.3.U.)D8=/~TyD{IO)C.C640P+L3.1~k){)D103,9T@3TP/T.(C0,0T).:.T-JR,H+~Tg,xLD+B,3-9-E*;.,0B+~Ti2xLJ/O,E,6.=-~TZ3x*@+@*41U1(;,104,T5+~v8wC,/17T,-C(20T,-7.(0N2@(.2*B22:*4/BK~qAt4/+7,7)E11-)/(/2-5+9)M?+/:5J1:A2-./*96A)1A5C+?5G-TN37/V0)./H+@-4-?-K*E-)7B-,/B/T+)U:9U8/TI5H7U2:TM4T1(U0/40F.T3*WH=A6(.UM+-0*82,T?0T/4:0V-4U:=N4.0?,0060T?680226,B(2/B((020@)./B)T1.@(2/@.UD88.4.8+=*D7B,00=,D(0/80TE*T++@3@,TE(U888.@:=+0-:+=(F3@..0R2T).T/6:)J4:(:,*0:.T50P+8+*1F3B)H3=(L4T71R(8?(+)1M3*/B(+/;78-B)@,:8B488TK08860N040D.=)P,@)6.2687:+U0*J-T9.=)T?JF/R9P)T).H4B(6,8+B3@(P1B)@*F4:*R+N*N+R0TQ,.:4-,/67:+UH,T/)6-+/4-T+1TK1@(6.T17T/+2/@+8/@)U2)TA36-)/MIC)3/C+1/E535)9B?P)01TB-O)91+195D/2/T)5T93T--21T9+:/T7,TQ1~UXHTS484N/F0H/H0T9,T;5U=1TM-T9.U,+T/-UD4,0TN*TB,70T4,,266+2I,70G.T/)T-,H-TE480/0T42UK.50T(6-@F/TC,8/J*TK8H*(0/0..D,4-T50T5*TK6H)F*F+T5,T7+UJ(T+2D+T-2J;=.B/T1/T5.U,/20A6A*303@U2-=-0/F(TO0=+D*:68/@+D*8/TK/B8=/F*=+6/D*T)2TO0:,4..2+0AH(0*088,0-800T5D00B4=(4.H.D48*4+//;-~v*o1F3F-119(3.-/7-?*7.;*C4;2EBTIC22.6=06)8A~qAmO81+-E-/09112B48-40~w4m1I)(4,46-:+*+-/~TrPhN=-D.4)*A/-)7-.559*38)638(26)~UU8hP,/80,/(1GI017(7-9KC59(3.?*+.28D=4,J:4226..,262,/~UV/fD6;*60-,78-4)402)1G7*--*1;E7/)./*28-4?0*06.*8(4/:AD160(416-.9~T}?^K/+A6CD+.2(2/T)K~UX)[9.-)35)1*)20.0).,~UX?[/5+)0F2~UXK[+3+~UXJZL,*)1~T}M[)-)-0(.43~T}?Z2,71(+@2-~m:YC*A./)1+--4+-,7)/-+)9T,V6K5E4+2):/8(6*82*(026*61@(:.2*6P0FB.2)00)26*4.249.5~Tr*YG.56.87)/,9*1.).9)1.5T/E)+450;0,01,,,?RM,7(A27)9/E+A/;7/;T*/1+5);3/?(9/?7E4*21+95T:834/D10;*.2+6159+44*402)6793-/770(4?@,,C45(;2M)T.5;*O7+1-/G)9,E+31-(;3E*I8(42*,,*@)41=+4(2/=/0+85B2//:2-./(27F0D)406*506T)@2*,)F02.2(@.DH*:6:092,/2.22+*68:2,(.0)(,=.6143B)+4280,).044.2):,(27.4,4-4/8+.*4-4,0(,*2159-(*/5;*-J9B98-,-:-6.0=0F+D,8*,).0F0..1*3,)*/.1*;~T{+X,.-5(/48-~TfNWQ/)C6:,:3)+~Tz=WK?*+,*06+21~TzNWE++5:+4.(8C~ThFWO7-),2:=0*,P0.)T*;55~Te?VP0-4*,/T.-022*..~TgQVP)1G-E*(08,4-6(:0~Tz(W)(+K@,*0-8/.-~TxLV@+)/,/0(,=5~T_RV4P).0N/05H+B3?/?2Q(T66/+M0+29(6=B)B/*/~TmGV(15)806,-(1~Tx*V4-)/014+8,**-BA)-~Tv.UE1)++?11(E4*.:+2*,2*(*14(86)44*,+(3-3~Tj*TF--5,+0=*,/~TkET=.772T((,4D(@-~TvFU/--/=;85.,,D587*1~Tm9A.I@38@@4:(J5@+TICB;,3J3.19),5:34?4((/6+-+@/)-5)+.O.CB38C2E3*77-I,98;,+-C(086.-@18O:7(G=-1/)+0(072@.6().G(/49,/2F,2.J/*/~Ti+F7;5+;,T0++5:940N0(11,/39/=C+-:A(33-/.28;/+.*054*=5-*T23+/..:+=/(-606*66R:68-B)B(=6*+~TjJ@)71*)501-)/4-D,8.0*34)*/~T^CUM?(7:C8AFCT)7:5J961874;@)2T+-T?T=@(854761/74/0(*5016)25+A)I~Te?N@9A)-5(995);/G).?//45*1.A//2G*)D1.18):*:466-8,,8J0JNJB280(21*/H3)/5(,15/3969)1~TiEW,*A-9/=/1.7-/A4-6.230-/1*53+.08B6.18.,26()881,9~|CV)9+/8+F0J61=M+;/-~rFWP?(..(04*,((7~Th=X);C3604*44(+38:)9~TeKW@C926DD2=,7AC~Tg;XK4-4((/?7(=)2~Ti1XQ.A7..91-(6-*+44)(038:).-~Tg3Y8+9;D:).-~Tg/])4-..*-)/.5+73/+7,74)0*D1)3.+)172/4+/549+1.*0.,-.)/14+F0/*J.:4(~tR[N++E)(2**8(2),+~z=[H-+?2*.0(:)2+,-5(~x8]G:+*,8(8-,-4()-2(2///1,7(1++,-)/5-,(,5,?(/+3.*0L-0.10(03*,.4(~TaK]-717.):20@.4(,///-3~TwL]5+++,+4,.(.6-015/~Tx-^*-(-.0(.))+~Tx;^6()1((*2(~TxO^8/(+..*./~TyF^H+)-,0**+~{M_-0/=*NC:+)-8(6/)+5+T6(62/.3(/.+43(A0C,/,0,;*51/(+-/)1*B:H0L):-~zJ_C-)+4/.,4.(09(1~Tg-_-1718)84:882-7T*~zPaR?+)0B((+~z@aR+5+**2128/~TmEeD,-33/.1+-33.(2244+026-~eNf951*+;/1*+02(*.8(:.~_Af92-J()+4*)-G)(,A,,0~ZAgD-7*-+1T4=,2@)N,~W=i,45)C1(/-/.(B+42)2.~TpJg,/7,115C/M)E?5.(8M+?1A(=75I3110,:3./6=.24=266R.@+=N61RF6B+B04@,2E(79;(?~WFiB/7/,-6,.60,7~Tr0jA6+60,?E-9;I61??(+=26@*4T+@?8-~t*kHL+1//(A0-.0../~s-lQM.92.*D-@/(+~Th1lE1)K0-09.).?,-2(.T31:7=/03~p6mH59604---:-0.=/-56,2A17?*,8+,A93(62;,T:().40/,84=J648.2(59~TlGo6=*-?87/(GB)2(.2+~Tr*mH@KG.3E:?(57435+8*=)@,6*F3:*F:2/02,4K)90?~V4n?M3E*8@1=T)B:*=315,579~Y0p-37?4)0H..1~TvCpM;/1.+2H24)2-91~T:qB?;T)*+799=)=C6):IB+)31-.171E(K-1,319*5-3,H=:,I,-0@.32,6H),454A,-.00-.31(=12.=88R(~T|Ir13)C0=,8)*/~{Es6/3/*-.200(,+~|PsBA15(+.60F((+~UTHt-4+4*N/7-A09)+**0~TS@u*,12,T99(18*6/9-G.30T.;/2C)822L6(~Z*u:+5@5C5TL9TR2=0T*2N,(.T(,46J*H5H4D-J2L(~z(uH?(+202:,8-)35-~UV6u=6--8T5+R9;1I))9/+9(7.C.+2;*A)1.,0A+213/~UXJvEU=M)3~TXCvG5-C.7)E0J6J/=3~UXKw@?(+.D0~UX.wBC)~UXJwN=*F-)+;+~TV-vO);F8B5-5:5@66:*@T9+D1*17361)1O5E)?.-1ACA5E)7/)3?+C7;?/7)AH):KF,P/=/61T-5T5+)7.;6?H;8.2@1H54J0@646)65:A6B@1:-H6.T5/:,T)9./N((9.A:+83F4=@40TATB/5D1:3J-6-076+0-*AE5K-A9K)T*,T0)75C/T2T,8,JDT)8H*:1934OD1L,=@*54/A3T@;A75*):N8T4+*-T=?35)5.10()..+)-T8/7-H,.+E-5((,--.)+557).1.,1,+(/7A,610):+1,35*6-(9.).C57;-531(1/)-?5;?+5,58G(10?(?-3-)1*)0/.AR,6+278/,;1543,T6)/),-(/,++)/*/+5(549)5,3)9+97;/11-/*A,-3I+O6M65,301@+01T/44,402LN2F(.+(131+5,)/A-,+((),)-M138+,,=):,4)0*4+=1.-+-*/-5(A))+A05BA(+2(.+H2..@+@54)660*,B424(*,8)B8000(.--31)./(311070(.8/.(8B0)000.56)61(-R(2/8)4.(,T/*7-.18(81*72(@345(10(=7B+*,8(=+@/@7*/0(8T,2+*577.-N)(;84T9;21+3B.P1H(H7D?6-:(0/2M/KOQ5A57-)-5*O/T*-/+C;C);91+3?(G/7/?-?79;)5*3/G51?MIA/;53/3?37,1)925)34)1D9+56/)19CG1Q+?*,3+7,13-?+90/-*;6-20.39-73);-19(73-5=5=+/9A33A9///.?41C(C3+9/)A0T,B/6.414)L0=@8G.:8.LB/2T)5.-C3,4TC24-=)@0*DTA2H-H.8)B4D8V))J+H;2)0O=T2N/8*.7DT4U:E@.01=.68426+2/132,,):.,4D)0B4).0*)2..2*8@/.,4+:,,+:58+4,,961)+-3-)+23/+1)+4)+-*+0?,)+3.+.*0;2).-,*-++3.),*6+*,,QN*,.)+.-*)-3*C.703(;4A@C4O1U)H?6I0/0?414+2.*).,.(.5FT.T/90),*4?8+63(;@).9H*070-)3.)/,AFE,/*(,3B?.;49(12(89(+3/-4OD*8+2A8)+92342(00(2563.AR3F341*).3*-,;*+,)4;=7F(,AB+812,8(:-80:,N+F3D*,H/29..1JT6FM03:*4A2+8A6(2G6+:C83:T0*A.T(=T44E)T=:?+,5K-Q1+22=@.-.C353E56197T(5-/G1-1A/5(T69K-),T?DB*20T/B*644A--,3/32--/2;/3()4,.30C+G6)4500482.28*6)808(6.+01,60K+--5.G+E./0C4TI:8()1T)(74A0K:E042N(B2.2=0T94:)H4H-8/0,L))+J+=*U61D,U05J1=):0B.H)H0J.6/6,.26)J9F6*7B,0.B)J/T-/F+=*D1E1N+T5*:,=3@2;040R*:+=3@*L1T?,+4:,J/(9488(2=?4A0*@B6D)=1F?91P+~TcFxE1/T-.D1B2:/89205=:*=)@/:KTG;)/I)4/--TH0T:/U+-32C.9)A8U80Q,TF)10T-0I(K.H@T54=+~T]QxK93G6.*D(8+~z0xE(-T(*?+E4*00*T-)N3~TT1xG85:8T32L?)3P.=.TI9*1P.=5T//:/:9M1T/3H-H9H(-5KAA0I=C))3T7C4;-5TL=T1E*/T40T(4A2..T8=(-T8+9066TO,-.02B=+0/0G2T(.6,?69(701-M+TH.TL070=0E(-=8:=0T3.73~TZQy(B+N,.-;1J/+9K/9*5.T08(.T))?6@0~Tr*xGTJ,:0D*F/*-~TW:x??7?*38(222=,T)(P+G9A+~TfIwLT2110T,4RN;4TE*F+T1(T)5TJ;C5(/~Tu?yD?/I*O0..U,/~TWDyB3/E*A,22F,:-0-~TrJyN77TJ(I+Q624D,T5(TI1~TZ)z98/(315I)?,(2I()6@(H.F(**~T_Iz/0/:,=(,131TD+T0/G(+.T)2U/+E,F=:.T7/N3L(E::0@).1~q*w=TL*-0M.)2=,)4R89*T/:-2UHBTC*L0R*6/5-V09T=;T=O,9P7~TX/zC@-R(:/--N1T7)J,TK(=/./5+E-C,U9+I*T2.1@;0T(*?000R)~TdEzM)57/U-3E,L8T)4T9*~T_0zA,1=,T9(T+18/+1TJ77-T5/:,252.J,TA+,1U*)*6TK)J3233/B7J/==J/L.P/6.L)7:F0W83:3T37TQ,R)8/)7B-F,N*N+P*N9B.7620T?-T)*T91F/~UXKtGC1C*:1472-*/--M,TJ7T:E//E6T271091E,-5A;*/@+)E;)/70/K3/?G+-?E9/6;TK2F:4(0J.TGT+N88HA)39T2?7DT2/T0I85TJ-(6G,C1T:*TB-V:U+J)23=+42@)F?*97;)A/IGE/5TBT8E33(32E5)//*//--(5?5?/)3:3:A.3(A/19+7/9))2,81=8,581,/+),1,24)*.4),;.E-7/;-22+08432Q;33;)11438+(18+@6:/6(*3E+139115=10;DK(73+,34-/I3)T.THT6K?)31/.3/E1;+/?1(-6.0E.M;79+5LT.:3470O)KQC79A9/4.6747*9J909(,89()?7T,(76(09,9214+FA03)A,90-.9(-5)T(J)234):/2*6+2/.+2;@+3)40H)8.6/4*@/21T1/8MAA..D+:7B,.3,583H/49(*/-31,))5,)/O+(711E5AAKC(/E31)-7.T(/9(K3)/7.-9-/3/-9:9T/7F1P9F5TA(B+=E35*CB00-.?:7,-856U7-TR4/D1*7);1A.;8;.ET+1)5.-/3*,1)+6I2+,/6/)76?)6.2.*.-(3+3,/,*(-8,F)T/T-*)+3*7054-D-89.+(+CO1*+-)1(71(3-)1++3(/-(/1+3(M3+7T29957(1/M-33G)-4*45F,*+H-.(01.3:-856/*5=(D3@;43D-,GT-1(.F5K-+785H))0?FT2JT*+)(5F?.;++*;0A:3:T(PET)T((/3-8/492(R0N4:(=.0.0()EGTLMT2?CTFT2?A/75/-/-)+5-/+3//1A*34-+9(76I0+,1*TD,15E33T(9T2T*)527,7,(+E,+)/1/Q9/-*/,)/T(-193AKOK5/I1)+3*1+?,;)O13/1(/.-*10())8/6.,(6OT?58/67TA)N9B7P7:+F,:6T-@H*D-.1B.41L14*,/@T0T93=6T)+,2P/41,+2+*(.;//*/-7*14/656T.+TNE9.K,A+K51*;0T.R;212-@9=1.+694/(+2-,+=*0/81.0,6B(4,2,:-H*2+230*:0..2(..646.*.4(2064.6=20:*D=88+D2F44N:=L6(41=*F+=2@,40=.TC.2+=0=(0+6(@26+(180*+11(1.+)951,14(,10+B-0*8+D/29T-3@1=6-8.0824*F+./L-.-D(T/5B4:*6+.1,0J-820D=N)8,0-2003)9,53G)72?*+/5+;4?(3=522832@:H*06P)B4B.L(T??B,:)B2*2+4303*IBA0726,8810F0(.K-3-;)7-(32-=*+/?+C13,,0;.@4-,I,(0;)?C(-1+-*+A3/-50;:-++A)A7-4A*A+631)3(12++,341/+=7(19,.13)095(703H9=+430)0,=34T8B76,*10(03*-/-.(0,*7*7-(7.1:127@78(.--+J3=5+/327*138/)11)17/),:,,5=/,-03,105*70IB-=C2T.CO.G-)A95C+)-33/7033/+55+55T,(;71*-0-2;,/-1,1),8)41*+.*600,=+@(6/0F6TK-T/(24,R;@72G0)6D,L--B:1T-8.8L02.:HF08(,,8(,+62+0)4/2(=04:*B2)1+-*-2)+/-*55,1(/@+)/@,2.J5TG@=+*-=(,2F.+8(824:0878(.F-)5.)4T30T))@2;2M)TD334;.,=/:04:4T;D)0E2K-;5,3THK5E65=19??-/K19A*37A(-:7@7H34QAE+C2/@-T-:4T5:P=U,TCU.RT+2J)H8P(N,T?5C-@3=.L3T5+TMA8/(5?1I-U/85+J5*GT)3*2326.T/38.36T-=:):-46742454T7-23A)(36-J,,4UHF8);3B)6.P*H0@3B4?440T9/U:E62;2).A*0038(.N:6:6,T5+,3;76-.5+E@315OE@)0.@..2:23206?*+28=C8N6+62*23/;@)16L0T)(N198)=N.U0(74B4@(R2T3,.,T5*8+T+2P(,2=0T/0L-E-T-)~lQi.252).+7)/A-+(1.5:+61H+H.*,+6,@7..65(,:=-8054-27+)7/:.0+0A./:3.(.=)(6:,8),:+6;)7,T(3139+;;:9)5JK~TWHzKT.*+,R(6+))~TaHzOO-E.80F*F+--~a*{(T*1M.6,30T),0/F+~Ta={6A+I((,=,N+~TXG{,G+7,10(0N)B/+-~TZK{00/I*I.T,*=.A,)0U4161~T^3{0UI/PD8*TC3-/~[P{NTA5T0/179+17A(T(4:.G.Q:78T7.2-F(0.H*D/~a8|1R-G3T8)T8,+,E*?0T?.F+=.T1-~mP|3T*+))A+?,40T,(TG,,-H0H+/+~TZH{=T()T6,K076C,T36T).R3T-9-9~TT9{NB/E-M5M)T(*?2*.8.O(?.32F6=*/,T-*D3TC/83~v8}@U6+P-)+UK9T+(TP9K7Q+5+T:)F)5+819-I-1/E-,+L((+T43T2.T8+TD,)2N,166*T31C6K,80N,..E0/4TG+J0UK(M070A.+.U20H0B)@-84T?,TI(T9*U,)~b0}HV+7O/W;)2+TG*T?-P.8/?1T3.U60T;+4/TR51+T@+T-)QC(AB3G)K-P1,9?(D9T*)B//-T6+D5(/Q01-F+D3.7K+Q:.3A3U()UCITR/;/E;T*5TD195(513I707;ME)G:Q(925=KB16+:E:0650=BH.00,8T23A.)602T;+T2:;)7.@:T2T)C0(0T44V=(T8:T3.R*U),T,0*0VE=00T4.80TG6H*12UF0T?(@-T32UN5T.2*0TE4TG(D.TG*VO)';
+var CHARSET = '';
+for (var ci = 40; ci <= 126 && CHARSET.length < 83; ci++)
+  if (ci !== 60 && ci !== 62 && ci !== 92 && ci !== 96) CHARSET += String.fromCharCode(ci);
+var CODE = {};
+for (var cj = 0; cj < 83; cj++) CODE[CHARSET[cj]] = cj;
+
+function decodeCoastInt(s) {
+  var lines = [], cur = [], px = 0, py = 0, acc = 0, pend = null, hasPend = false;
+  for (var i = 0; i < s.length; i++) {
+    var c = CODE[s[i]];
+    if (c === 82) {
+      if (cur.length) lines.push(cur);
+      cur = []; px = 0; py = 0; acc = 0; hasPend = false;
+    } else if (c >= 41) {
+      acc = acc * 41 + (c - 41);
+    } else {
+      acc = acc * 41 + c;
+      var v = (acc % 2 === 0) ? acc / 2 : -(acc + 1) / 2;
+      acc = 0;
+      if (!hasPend) { pend = v; hasPend = true; }
+      else { px += pend; py += v; cur.push([px, py]); hasPend = false; }
+    }
+  }
+  if (cur.length) lines.push(cur);
+  return lines;
+}
+
+var CITIES = [
+  {n:'Tokyo',la:35.68,lo:139.69},{n:'Osaka',la:34.69,lo:135.50},{n:'Seoul',la:37.57,lo:126.98},
+  {n:'Beijing',la:39.90,lo:116.41},{n:'Shanghai',la:31.23,lo:121.47},{n:'Hong Kong',la:22.32,lo:114.17},
+  {n:'Manila',la:14.60,lo:120.98},{n:'Ho Chi Minh City',la:10.82,lo:106.63},{n:'Bangkok',la:13.76,lo:100.50},
+  {n:'Singapore',la:1.35,lo:103.82},{n:'Jakarta',la:-6.21,lo:106.85},{n:'Dhaka',la:23.81,lo:90.41},
+  {n:'Delhi',la:28.61,lo:77.21},{n:'Mumbai',la:19.08,lo:72.88},{n:'Karachi',la:24.86,lo:67.01},
+  {n:'Tehran',la:35.69,lo:51.39},{n:'Baghdad',la:33.31,lo:44.36},{n:'Istanbul',la:41.01,lo:28.98},
+  {n:'Moscow',la:55.76,lo:37.62},{n:'Cairo',la:30.04,lo:31.24},{n:'Nairobi',la:-1.29,lo:36.82},
+  {n:'Johannesburg',la:-26.20,lo:28.05},{n:'Cape Town',la:-33.92,lo:18.42},{n:'Lagos',la:6.52,lo:3.38},
+  {n:'Antananarivo',la:-18.88,lo:47.51},{n:'Rome',la:41.90,lo:12.50},{n:'Berlin',la:52.52,lo:13.40},
+  {n:'Paris',la:48.86,lo:2.35},{n:'Madrid',la:40.42,lo:-3.70},{n:'London',la:51.51,lo:-0.13},
+  {n:'Reykjavik',la:64.15,lo:-21.94},{n:'New York',la:40.71,lo:-74.01},{n:'Toronto',la:43.65,lo:-79.38},
+  {n:'Chicago',la:41.88,lo:-87.63},{n:'Mexico City',la:19.43,lo:-99.13},{n:'Los Angeles',la:34.05,lo:-118.24},
+  {n:'Vancouver',la:49.28,lo:-123.12},{n:'Anchorage',la:61.22,lo:-149.90},{n:'Honolulu',la:21.31,lo:-157.86},
+  {n:'Bogota',la:4.71,lo:-74.07},{n:'Lima',la:-12.05,lo:-77.04},{n:'Santiago',la:-33.45,lo:-70.67},
+  {n:'Buenos Aires',la:-34.60,lo:-58.38},{n:'Sao Paulo',la:-23.55,lo:-46.63},{n:'Rio de Janeiro',la:-22.91,lo:-43.17},
+  {n:'Perth',la:-31.95,lo:115.86},{n:'Sydney',la:-33.87,lo:151.21},{n:'Melbourne',la:-37.81,lo:144.96},
+  {n:'Auckland',la:-36.85,lo:174.76},{n:'Wellington',la:-41.29,lo:174.78},{n:'Punta Arenas',la:-53.16,lo:-70.91},
+  {n:'South Pole',la:-90,lo:0},{n:'North Pole',la:90,lo:0}
+];
+
+/* ============================== geometry ============================== */
+var D2R = Math.PI / 180, R2D = 180 / Math.PI, R_EARTH = 6371;
+
+/* (Θ from antipode, bearing A from observer) for a surface point — spec math. */
+function thetaBearing(la, lo, obs) {
+  var f = [Math.cos(la*D2R)*Math.cos(lo*D2R), Math.cos(la*D2R)*Math.sin(lo*D2R), Math.sin(la*D2R)];
+  var e = f[0]*obs.east[0] + f[1]*obs.east[1] + f[2]*obs.east[2];
+  var n = f[0]*obs.north[0] + f[1]*obs.north[1] + f[2]*obs.north[2];
+  var u = f[0]*obs.up[0] + f[1]*obs.up[1] + f[2]*obs.up[2];
+  var th = Math.acos(Math.max(-1, Math.min(1, -u))) * R2D;
+  var A = Math.atan2(e, n) * R2D;
+  return [th, (A + 360) % 360];
+}
+function makeObserver(la, lo) {
+  var p = la*D2R, l = lo*D2R;
+  return {
+    la: la, lo: lo,
+    up:    [Math.cos(p)*Math.cos(l),  Math.cos(p)*Math.sin(l),  Math.sin(p)],
+    east:  [-Math.sin(l),             Math.cos(l),              0],
+    north: [-Math.sin(p)*Math.cos(l), -Math.sin(p)*Math.sin(l), Math.cos(p)]
+  };
+}
+
+/* ============================== state ============================== */
+var S = {
+  r: 1.0,            // window radius, meters
+  h: 1.70,           // eye height, meters
+  metric: true,
+  lat: 40.7128, lon: -74.0060,
+  obs: null, coastTB: null, cityTB: null, selCity: null
+};
+var COAST = decodeCoastInt(COAST_DATA).map(function (line) {
+  return line.map(function (p) { return [p[1] / 10, p[0] / 10]; });  // -> [lat, lon] degrees
+});
+
+/* slider is log-scaled: 1 cm .. 10 km */
+var R_MIN = 0.01, R_MAX = 10000;
+function sliderToR(v) { return R_MIN * Math.pow(R_MAX / R_MIN, v / 1000); }
+function rToSlider(r) { return 1000 * Math.log(r / R_MIN) / Math.log(R_MAX / R_MIN); }
+
+function nu()    { return Math.atan2(S.r, S.h); }            // radians
+function theta() { return 2 * nu(); }                        // radians
+
+function recomputeLocation() {
+  S.obs = makeObserver(S.lat, S.lon);
+  S.coastTB = COAST.map(function (line) {
+    return line.map(function (p) { return thetaBearing(p[0], p[1], S.obs); });
+  });
+  S.cityTB = CITIES.map(function (c) {
+    var tb = thetaBearing(c.la, c.lo, S.obs);
+    return { n: c.n, th: tb[0], A: tb[1] };
+  });
+}
+
+/* ============================== formatting ============================== */
+var FT = 3.280839895;
+function fmtLen(m) {          // length in meters -> chosen units, sensible magnitude
+  if (S.metric) {
+    if (m < 1) return (m * 100).toFixed(m < 0.1 ? 1 : 0) + ' cm';
+    if (m < 1000) return m.toFixed(m < 10 ? 2 : m < 100 ? 1 : 0) + ' m';
+    return (m / 1000).toFixed(m < 10000 ? 2 : 1) + ' km';
+  }
+  var ft = m * FT;
+  if (ft < 1) return (ft * 12).toFixed(1) + ' in';
+  if (ft < 5280) return ft.toFixed(ft < 10 ? 2 : ft < 100 ? 1 : 0) + ' ft';
+  return (ft / 5280).toFixed(2) + ' mi';
+}
+function fmtKm(km) {
+  if (!S.metric) { var mi = km * 0.6213712; return Math.round(mi).toLocaleString() + ' mi'; }
+  return Math.round(km).toLocaleString() + ' km';
+}
+
+/* ============================== cross-section SVG ============================== */
+var SVGNS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent, text) {
+  var e = document.createElementNS(SVGNS, name);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  (parent || xsec).appendChild(e);
+  return e;
+}
+var xsec = document.getElementById('xsec');
+
+function drawXsec() {
+  xsec.textContent = '';
+  var cx = 240, cy = 310, R = 195;
+  var v = nu(), th = theta();
+  var P = [cx, cy - R];                                   // you
+  var A = [cx, cy + R];                                   // antipode
+  // far-surface landing points: arc 2ν either side of the antipode
+  var Fp = [cx + R * Math.sin(th), cy + R * Math.cos(th)];
+  var Fm = [cx - R * Math.sin(th), cy + R * Math.cos(th)];
+
+  // visible cap wedge: P -> Fm -> arc(through A) -> Fp -> close
+  var large = th > Math.PI / 2 ? 1 : 0;
+  el('path', { d: 'M' + P + ' L' + Fm + ' A' + R + ' ' + R + ' 0 ' + large + ' 0 ' + Fp + ' Z',
+    fill: 'var(--cap)', stroke: 'none' });
+
+  el('circle', { cx: cx, cy: cy, r: R, fill: 'none', stroke: 'var(--line)', 'stroke-width': 1.5 });
+
+  // vertical diameter (your nadir line)
+  el('line', { x1: P[0], y1: P[1], x2: A[0], y2: A[1], stroke: 'var(--faint)',
+    'stroke-dasharray': '3 5', 'stroke-width': 1 });
+
+  // sight chords
+  [Fp, Fm].forEach(function (F) {
+    el('line', { x1: P[0], y1: P[1], x2: F[0], y2: F[1], stroke: 'var(--glow)',
+      'stroke-width': 1.4, opacity: .9 });
+  });
+
+  // bright visible arc on the far surface
+  el('path', { d: 'M' + Fm + ' A' + R + ' ' + R + ' 0 ' + large + ' 0 ' + Fp,
+    fill: 'none', stroke: 'var(--glow)', 'stroke-width': 4, 'stroke-linecap': 'round' });
+
+  // ν angle arc at you
+  var ar = 46;
+  el('path', { d: 'M' + (P[0]) + ' ' + (P[1] + ar) +
+    ' A' + ar + ' ' + ar + ' 0 0 0 ' + (P[0] - ar * Math.sin(v)) + ' ' + (P[1] + ar * Math.cos(v)),
+    fill: 'none', stroke: 'var(--warm)', 'stroke-width': 1.3 });
+  el('text', { x: P[0] - ar * Math.sin(v / 2) - 8, y: P[1] + ar * Math.cos(v / 2) + 14,
+    fill: 'var(--warm)', 'text-anchor': 'end' }, null, 'ν = ' + (v * R2D).toFixed(1) + '°');
+
+  // Θ angle arc at the center
+  var cr = 40;
+  el('path', { d: 'M' + cx + ' ' + (cy + cr) +
+    ' A' + cr + ' ' + cr + ' 0 ' + (th > Math.PI ? 1 : 0) + ' 0 ' +
+    (cx - cr * Math.sin(th)) + ' ' + (cy + cr * Math.cos(th)), fill: 'none',
+    stroke: 'var(--glow)', 'stroke-width': 1.3 });
+  el('text', { x: cx - 8, y: cy - 8, fill: 'var(--glow)', 'text-anchor': 'end' }, null,
+    'Θ = 2ν = ' + (th * R2D).toFixed(1) + '°');
+
+  // labels on the sphere
+  el('circle', { cx: P[0], cy: P[1], r: 3.4, fill: 'var(--warm)' });
+  el('text', { x: P[0] + 10, y: P[1] + 1 }, null, 'you');
+  el('circle', { cx: A[0], cy: A[1], r: 2.8, fill: 'var(--glow)' });
+  el('text', { x: A[0] + 10, y: A[1] + 2 }, null, 'your antipode');
+
+  /* --- inset: the window at your feet, true shape (r : h to scale) --- */
+  var ix = 14, iy = 8, iw = 180, ih = 118;
+  var g = el('g', {});
+  el('rect', { x: ix, y: iy, width: iw, height: ih, rx: 9, fill: 'rgba(0,0,0,.45)',
+    stroke: 'var(--line)' }, g);
+  var groundY = iy + ih - 22, eyeX = ix + iw / 2;
+  var scale = Math.min(34 / S.h, (iw / 2 - 16) / Math.max(S.r, S.h * 0.35));
+  var eyeY = groundY - S.h * scale, rpx = S.r * scale;
+  el('line', { x1: ix + 8, y1: groundY, x2: ix + iw - 8, y2: groundY,
+    stroke: 'var(--faint)', 'stroke-width': 1 }, g);
+  el('line', { x1: eyeX - rpx, y1: groundY, x2: eyeX + rpx, y2: groundY,
+    stroke: 'var(--glow)', 'stroke-width': 4, 'stroke-linecap': 'round', opacity: .95 }, g);
+  // stick figure
+  el('line', { x1: eyeX, y1: eyeY + 7, x2: eyeX, y2: groundY, stroke: 'var(--warm)', 'stroke-width': 1.6 }, g);
+  el('circle', { cx: eyeX, cy: eyeY, r: 4, fill: 'none', stroke: 'var(--warm)', 'stroke-width': 1.6 }, g);
+  // sight lines to the window rim
+  [-1, 1].forEach(function (s) {
+    el('line', { x1: eyeX, y1: eyeY, x2: eyeX + s * rpx, y2: groundY,
+      stroke: 'var(--glow)', 'stroke-width': 1, 'stroke-dasharray': '3 3' }, g);
+  });
+  el('text', { x: eyeX, y: groundY + 15, 'text-anchor': 'middle' }, null,
+    'r = ' + fmtLen(S.r) + '   h = ' + fmtLen(S.h));
+  el('text', { x: ix + 9, y: iy + 15, fill: 'var(--faint)' }, null, 'at your feet (to scale):');
+}
+
+/* ============================== far-side map ============================== */
+var map = document.getElementById('map'), ctx = map.getContext('2d');
+
+function mapXY(th, A, cx, cy, Rpx) {
+  var rho = th / 180 * Rpx;
+  return [cx + rho * Math.sin(A * D2R), cy - rho * Math.cos(A * D2R)];
+}
+
+function drawCoast(cx, cy, Rpx, maxJump) {
+  ctx.beginPath();
+  for (var i = 0; i < S.coastTB.length; i++) {
+    var line = S.coastTB[i], pen = false, px = 0, py = 0;
+    for (var j = 0; j < line.length; j++) {
+      if (line[j][0] > 177) { pen = false; continue; }   // singular near your own position
+      var q = mapXY(line[j][0], line[j][1], cx, cy, Rpx);
+      if (pen && Math.abs(q[0] - px) + Math.abs(q[1] - py) > maxJump) pen = false;
+      if (pen) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]);
+      pen = true; px = q[0]; py = q[1];
+    }
+  }
+  ctx.stroke();
+}
+
+function drawMap() {
+  var W = map.width, cx = W / 2, cy = W / 2, Rpx = W / 2 - 40;
+  var thMax = theta() * R2D;
+  ctx.clearRect(0, 0, W, W);
+  ctx.lineJoin = ctx.lineCap = 'round';
+
+  // Θ rings
+  ctx.strokeStyle = 'rgba(120,160,200,.16)'; ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(159,184,204,.55)';
+  ctx.font = '19px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+  for (var t = 30; t <= 150; t += 30) {
+    ctx.beginPath(); ctx.arc(cx, cy, t / 180 * Rpx, 0, 7); ctx.stroke();
+    ctx.fillText(t + '°', cx + t / 180 * Rpx * 0.7071 + 4, cy - t / 180 * Rpx * 0.7071 - 4);
+  }
+  ctx.strokeStyle = 'rgba(255,196,107,.4)';
+  ctx.beginPath(); ctx.arc(cx, cy, Rpx, 0, 7); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,196,107,.6)'; ctx.textAlign = 'center';
+  ctx.fillText('180° — you, in every direction', cx, cy + Rpx + 26);
+
+  // all coastlines, dim
+  ctx.strokeStyle = 'rgba(159,184,204,.28)'; ctx.lineWidth = 1.4;
+  drawCoast(cx, cy, Rpx, W * 0.3);
+
+  // visible cap: fill + bright coastlines clipped inside
+  var capR = Math.min(thMax, 180) / 180 * Rpx;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, capR, 0, 7); ctx.clip();
+  ctx.fillStyle = 'rgba(127,212,255,.07)'; ctx.fillRect(0, 0, W, W);
+  ctx.strokeStyle = 'rgba(223,233,240,.95)'; ctx.lineWidth = 2;
+  drawCoast(cx, cy, Rpx, W * 0.3);
+  ctx.restore();
+  ctx.strokeStyle = 'var(--glow)' ; ctx.strokeStyle = 'rgba(127,212,255,.85)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(cx, cy, capR, 0, 7); ctx.stroke();
+
+  // antipode reticle
+  ctx.strokeStyle = 'rgba(255,196,107,.9)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - 10, cy); ctx.lineTo(cx + 10, cy);
+  ctx.moveTo(cx, cy - 10); ctx.lineTo(cx, cy + 10); ctx.stroke();
+
+  // cities
+  ctx.font = '18px -apple-system, system-ui, sans-serif';
+  for (var i = 0; i < S.cityTB.length; i++) {
+    var c = S.cityTB[i];
+    if (c.th > 178) continue;
+    var q = mapXY(c.th, c.A, cx, cy, Rpx);
+    var vis = c.th <= thMax, sel = S.selCity === c.n;
+    ctx.fillStyle = sel ? 'rgba(255,196,107,1)' : vis ? 'rgba(223,233,240,.95)' : 'rgba(159,184,204,.3)';
+    ctx.beginPath(); ctx.arc(q[0], q[1], sel ? 5 : 3.4, 0, 7); ctx.fill();
+    if (vis || sel) {
+      ctx.textAlign = q[0] > cx ? 'left' : 'right';
+      ctx.fillText(c.n, q[0] + (q[0] > cx ? 8 : -8), q[1] + 6);
+    }
+  }
+  document.getElementById('mapWhere').textContent =
+    '— antipode of ' + S.lat.toFixed(2) + '°, ' + S.lon.toFixed(2) + '°';
+}
+map.addEventListener('click', function (ev) {
+  var b = map.getBoundingClientRect(), W = map.width;
+  var mx = (ev.clientX - b.left) / b.width * W, my = (ev.clientY - b.top) / b.height * W;
+  var cx = W / 2, cy = W / 2, Rpx = W / 2 - 40, best = null, bd = 40 * 40;
+  S.cityTB.forEach(function (c) {
+    if (c.th > 178) return;
+    var q = mapXY(c.th, c.A, cx, cy, Rpx);
+    var d = (q[0] - mx) * (q[0] - mx) + (q[1] - my) * (q[1] - my);
+    if (d < bd) { bd = d; best = c; }
+  });
+  if (best) selectCity(best.n);
+});
+
+/* ============================== readouts & cities ============================== */
+function updateReadouts() {
+  var v = nu(), th = theta(), thD = th * R2D;
+  var frac = (1 - Math.cos(th)) / 2;
+  var capKm = th * R_EARTH;                       // arc radius of cap, from antipode
+  var minDist = (Math.PI - th) * R_EARTH;         // nearest visible point, from you
+  var area = 2 * Math.PI * R_EARTH * R_EARTH * (1 - Math.cos(th));
+  document.getElementById('roNu').textContent = (v * R2D).toFixed(2) + '°';
+  document.getElementById('roTh').textContent = thD.toFixed(2) + '°';
+  document.getElementById('roPct').innerHTML = (frac * 100).toPrecision(frac < 0.001 ? 2 : 3) + ' <small>%</small>';
+  document.getElementById('roS').textContent = fmtKm(capKm) + ' from antipode';
+  document.getElementById('roD').textContent = fmtKm(minDist) + ' away';
+  document.getElementById('roA').innerHTML = area >= 1e6
+    ? (area / 1e6).toPrecision(3) + ' <small>M km²</small>'
+    : Math.round(area).toLocaleString() + ' <small>km²</small>';
+
+  var fact = document.getElementById('fact');
+  if (Math.abs(S.r - S.h) / S.h < 0.03)
+    fact.textContent = '★ radius = eye height → ν = 45°, Θ = 90° — a circle as wide as you are tall shows exactly half the planet.';
+  else if (thD >= 179)
+    fact.textContent = '★ the horizon limit: even an infinite window shows only the far hemisphere of directions — but that is the entire surface.';
+  else fact.textContent = '';
+}
+
+function updateCities() {
+  var thD = theta() * R2D;
+  var list = document.getElementById('citylist');
+  list.textContent = '';
+  var sorted = S.cityTB.slice().sort(function (a, b) { return a.th - b.th; });
+  var nVis = 0;
+  sorted.forEach(function (c) {
+    var vis = c.th <= thD;
+    if (vis) nVis++;
+    if (!vis && c.th > thD * 2 + 25 && !(S.selCity === c.n)) return;  // keep the list short
+    var d = document.createElement('span');
+    d.className = 'city' + (vis ? '' : ' out') + (S.selCity === c.n ? ' sel' : '');
+    d.innerHTML = '<b>' + c.n + '</b> <small>Θ ' + c.th.toFixed(1) + '°</small>';
+    d.onclick = function () { selectCity(c.n); };
+    list.appendChild(d);
+  });
+  document.getElementById('cityCount').textContent = nVis + ' of ' + S.cityTB.length;
+
+  var inv = document.getElementById('inverse');
+  if (S.selCity) {
+    var c = S.cityTB.find(function (x) { return x.n === S.selCity; });
+    var need = S.h * Math.tan(c.th / 2 * D2R);
+    inv.innerHTML = 'To see <b>' + c.n + '</b> (Θ = ' + c.th.toFixed(1) +
+      '°) you need a window of radius <b>' + fmtLen(need) + '</b> at eye height ' + fmtLen(S.h) +
+      (c.th <= thD ? ' — in view now.' : ' — window set to just reach it.');
+  } else inv.textContent = '';
+}
+
+function selectCity(name) {
+  S.selCity = name;
+  var c = S.cityTB.find(function (x) { return x.n === name; });
+  S.r = Math.min(R_MAX, Math.max(R_MIN, S.h * Math.tan(Math.min(c.th / 2 + 0.05, 89.9) * D2R)));
+  document.getElementById('rSlider').value = rToSlider(S.r);
+  render();
+}
+
+/* ============================== presets ============================== */
+var PRESETS = [
+  { n: 'phone on the floor', r: 0.075 },
+  { n: 'dinner plate', r: 0.14 },
+  { n: 'manhole cover', r: 0.33 },
+  { n: 'hula hoop', r: 0.45 },
+  { n: 'trampoline', r: 2.13 },
+  { n: 'your height', r: null, hot: true },       // r = h -> half the planet
+  { n: 'basketball court', r: 7.5 },
+  { n: 'soccer pitch', r: 34 },
+  { n: 'city block', r: 80 },
+  { n: 'Central Park', r: 420 }
+];
+var presetBox = document.getElementById('presets');
+PRESETS.forEach(function (p) {
+  var b = document.createElement('button');
+  b.className = 'chipbtn' + (p.hot ? ' hot' : '');
+  b.innerHTML = p.n + (p.r ? '<small>' + fmtLen(p.r) + '</small>' : '<small>= h</small>');
+  b.onclick = function () {
+    S.r = p.r == null ? S.h : p.r;
+    S.selCity = null;
+    document.getElementById('rSlider').value = rToSlider(S.r);
+    render();
+  };
+  presetBox.appendChild(b);
+});
+
+/* ============================== wiring ============================== */
+function render() {
+  document.getElementById('rVal').textContent = '— ' + fmtLen(S.r);
+  document.getElementById('hIn').value = S.metric ? S.h.toFixed(2) : (S.h * FT).toFixed(2);
+  document.getElementById('hUnit').textContent = S.metric ? 'm' : 'ft';
+  drawXsec(); drawMap(); updateReadouts(); updateCities();
+}
+document.getElementById('rSlider').addEventListener('input', function () {
+  S.r = sliderToR(+this.value); S.selCity = null; render();
+});
+document.getElementById('hIn').addEventListener('change', function () {
+  var v = parseFloat(this.value);
+  if (v > 0) { S.h = S.metric ? v : v / FT; render(); }
+});
+document.getElementById('unitBtn').addEventListener('click', function () {
+  S.metric = !S.metric; render();
+});
+function setLoc(la, lo) {
+  if (!isFinite(la) || !isFinite(lo) || Math.abs(la) > 90) return;
+  S.lat = la; S.lon = ((lo + 180) % 360 + 360) % 360 - 180;
+  document.getElementById('latIn').value = S.lat.toFixed(4);
+  document.getElementById('lonIn').value = S.lon.toFixed(4);
+  recomputeLocation(); S.selCity = null; render();
+}
+document.getElementById('latIn').addEventListener('change', function () {
+  setLoc(parseFloat(this.value), S.lon);
+});
+document.getElementById('lonIn').addEventListener('change', function () {
+  setLoc(S.lat, parseFloat(this.value));
+});
+document.getElementById('gpsBtn').addEventListener('click', function () {
+  navigator.geolocation && navigator.geolocation.getCurrentPosition(function (pos) {
+    setLoc(pos.coords.latitude, pos.coords.longitude);
+  }, function () { alert('Location unavailable — type lat/lon instead.'); });
+});
+
+/* boot */
+document.getElementById('latIn').value = S.lat.toFixed(4);
+document.getElementById('lonIn').value = S.lon.toFixed(4);
+recomputeLocation();
+S.r = sliderToR(+document.getElementById('rSlider').value);
+render();
+
+/* console self-check against the AR app's acceptance table (observer = NYC) */
+(function () {
+  var perth = S.cityTB.find(function (c) { return c.n === 'Perth'; });
+  var ok1 = Math.abs(perth.th - 11.8) < 0.3 && Math.abs(perth.A - 314.8) < 0.5;
+  var sp = S.cityTB.find(function (c) { return c.n === 'South Pole'; });
+  var ok2 = Math.abs(sp.th - 49.3) < 0.3 && Math.abs(sp.A - 180) < 0.5;
+  console.log('[self-check] Perth Θ/A:', perth.th.toFixed(1), perth.A.toFixed(1), ok1 ? 'OK' : 'FAIL',
+    '| South Pole:', sp.th.toFixed(1), sp.A.toFixed(1), ok2 ? 'OK' : 'FAIL');
+})();
+</script>
+</body>
+</html>

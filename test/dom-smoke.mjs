@@ -6,7 +6,7 @@ import { readFileSync } from 'fs';
 import vm from 'vm';
 
 const here = new URL('.', import.meta.url).pathname;
-const html = readFileSync(here + '../index.html', 'utf8');
+const html = readFileSync(here + '../ar/index.html', 'utf8');
 const blocks = [...html.matchAll(/<script(?: id="core")?>([\s\S]*?)<\/script>/g)].map(m => m[1]);
 if (blocks.length !== 2) { console.error('expected 2 script blocks, got ' + blocks.length); process.exit(1); }
 

@@ -4,9 +4,9 @@
 # Run it, then open  https://<this-mac's-ip>:8443  on the phone and accept the
 # self-signed certificate warning.
 #
-# Only index.html is served -- never the whole directory. This machine may sit
-# on a routable address, and a directory server would hand out the TLS private
-# key below to anyone who asked for it.
+# Only the site's .html pages are served, from an allowlist built at startup --
+# never the whole directory. This machine may sit on a routable address, and a
+# directory server would hand out the TLS private key below to anyone who asked.
 cd "$(dirname "$0")"
 
 mkdir -p .tls
@@ -29,18 +29,32 @@ exec python3 -c '
 import http.server, ssl, sys, os
 
 PORT = int(os.environ.get("PORT", "8443"))
-PAGE = os.path.abspath("index.html")
+ROOT = os.path.abspath(".")
+PAGES = {}                      # url path -> absolute file path, built once
+for dirpath, dirs, files in os.walk(ROOT):
+    dirs[:] = [d for d in dirs if not d.startswith(".")]
+    for f in files:
+        if not f.endswith(".html"):
+            continue
+        rel = os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/")
+        PAGES["/" + rel] = os.path.join(dirpath, f)
+        if f == "index.html":
+            base = "/" + rel[: -len("index.html")]
+            PAGES[base] = os.path.join(dirpath, f)
+            if base != "/":
+                PAGES[base.rstrip("/")] = os.path.join(dirpath, f)
 
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def do_GET(self):
         path = self.path.split("?", 1)[0].split("#", 1)[0]
-        if path not in ("/", "/index.html"):
+        page = PAGES.get(path)
+        if page is None:
             self.send_error(404)
             return
         try:
-            body = open(PAGE, "rb").read()
+            body = open(page, "rb").read()
         except OSError:
             self.send_error(500)
             return

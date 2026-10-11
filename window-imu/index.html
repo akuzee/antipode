@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Earth Window — iPad IMU Antipode View</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+            touch-action: none;            /* all gestures are ours (pinch = eye distance) */
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            background: #050508;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top-color: #4ecdc4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Plumb marker: predicted screen point directly beneath the eye.
+           The rendered white antipode dot must sit inside this ring at all
+           times (live calibration invariant) — position driven by JS. */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 22px;
+            height: 22px;
+            pointer-events: none;
+            border: 1px solid rgba(78,205,196,0.65);
+            border-radius: 50%;
+            box-shadow: 0 0 6px rgba(78,205,196,0.35);
+        }
+
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(78,205,196,0.55);
+        }
+
+        #crosshair::before {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+        }
+
+        #crosshair::after {
+            width: 100%;
+            height: 1px;
+            top: 50%;
+        }
+
+        #controls-hint {
+            position: absolute;
+            bottom: 14px;
+            left: 16px;
+            color: rgba(255,255,255,0.38);
+            font-size: 11px;
+            letter-spacing: 0.3px;
+            pointer-events: none;
+        }
+
+        #hud {
+            position: absolute;
+            top: 14px;
+            left: 16px;
+            color: rgba(255,255,255,0.85);
+            background: rgba(8,10,18,0.72);
+            border: 1px solid rgba(78,205,196,0.25);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-family: 'SF Mono', Menlo, monospace;
+            font-size: 11px;
+            line-height: 1.55;
+            white-space: pre;
+            pointer-events: none;
+        }
+
+        /* Tap-to-start overlay: iOS requires a user gesture before
+           DeviceOrientationEvent.requestPermission() can be called. */
+        #start-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(5,5,10,0.86);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        #start-card {
+            max-width: 420px;
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            font-size: 15px;
+            line-height: 1.6;
+            padding: 28px 30px;
+            border: 1px solid rgba(78,205,196,0.35);
+            border-radius: 14px;
+            background: rgba(10,14,24,0.9);
+        }
+
+        #start-card small { color: rgba(255,255,255,0.55); font-size: 12.5px; }
+
+        #start-btn {
+            margin-top: 18px;
+            padding: 13px 26px;
+            font-size: 15px;
+            font-family: inherit;
+            color: #06141a;
+            background: #4ecdc4;
+            border: none;
+            border-radius: 26px;
+        }
+
+        /* Touch buttons (keyboards don't travel with iPads) */
+        #touchbar {
+            position: absolute;
+            top: calc(14px + env(safe-area-inset-top));
+            right: calc(16px + env(safe-area-inset-right));
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 5;
+        }
+
+        .tb {
+            min-width: 52px;
+            padding: 11px 13px;
+            font-size: 12px;
+            font-family: inherit;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            color: rgba(255,255,255,0.85);
+            background: rgba(10,14,24,0.78);
+            border: 1px solid rgba(78,205,196,0.3);
+            border-radius: 10px;
+        }
+
+        #hud { top: calc(14px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); }
+        #controls-hint { bottom: calc(12px + env(safe-area-inset-bottom)); left: calc(16px + env(safe-area-inset-left)); }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="loading">
+        <div class="spinner"></div>
+        Loading view...
+    </div>
+    
+    
+    <div id="crosshair"></div>
+    <div id="hud"></div>
+    <div id="touchbar">
+        <button class="tb" id="tb-hud">HUD</button>
+        <button class="tb" id="tb-rings">RINGS</button>
+        <button class="tb" id="tb-north">N ⟲</button>
+    </div>
+    <div id="start-overlay">
+        <div id="start-card">
+            🌍 <b>Window through the Earth</b><br>
+            The iPad is a pane of glass: where its <i>back</i> points is what
+            you see through the planet. Flat on your palms = the antipode;
+            tilt it to sweep the far hemisphere.<br>
+            <small>Pinch = viewing distance · N ⟲ = point top edge north, tap, to true-up the compass</small><br>
+            <button id="start-btn">Tap to start — allows motion &amp; orientation</button>
+        </div>
+    </div>
+    <div id="controls-hint">IMU window · pinch = eye distance · N⟲ true-up compass · desktop: T keyboard-eye · [ ] 9 0 , . manual pane · O flip screen-rotation sign · H R P toggles · F fullscreen</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js"></script>
+    
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        // SCALE FACTOR: 500x (can increase to ~5000x max safely)
+        const SCALE = 5000;
+        
+        const CONFIG = {
+            globeRadius: 5 * SCALE,  // Base 5 × scale
+            backgroundColor: 0x000008,  // Near-black for starry sky
+            oceanColor: 0x333333,        // Grey ocean, very transparent
+            
+            // NYC coordinates
+            nycLat: 40.71,
+            nycLon: -74.01,
+            
+            // Antipode (directly opposite NYC on Earth)
+            antipodeLat: -40.71,
+            antipodeLon: 105.99,  // 180 - 74.01
+            
+            // Day/night
+            timeSpeed: 360,  // 6 min per second for visible movement
+        };
+
+        // ============================================
+        // WINDOW / IMU CONFIGURATION (iPad build — no camera)
+        // ============================================
+        // The iPad is a pane of glass aimed by its IMU. The virtual Earth is
+        // anchored to REAL gravity (DeviceOrientation beta/gamma, absolute)
+        // and REAL north (webkitCompassHeading fused into alpha).
+        // SCREEN FRAME: origin at glass center, +x = screen right, +y =
+        // toward the top edge, +z = out of the glass toward the viewer (m).
+        // EYE MODEL: held at arm's length with the glass normal to your line
+        // of sight, the eye is exactly (0, 0, eyeDistance) in this frame —
+        // the one posture where a fixed eye is the truth, not an
+        // approximation. Pinch adjusts eyeDistance (= field of view).
+        CONFIG.WINDOW = {
+            screenWidth: 0.2476,   // physical glass width (m) — 11" iPad ≈ 0.2476; 12.9/13" ≈ 0.2807; mini ≈ 0.1958
+            screenHeight: 0.1785,  // physical glass height (m) — 11" ≈ 0.1785; 12.9/13" ≈ 0.2147; mini ≈ 0.1284
+            eyeDistance: 0.55,     // glass -> eye along the normal (m); pinch to adjust [0.20, 1.20]
+            nearFactor: 1e-3,      // near plane = globeRadius * this (depth precision, not geometry)
+            farFactor: 50,         // far plane = globeRadius * this (covers the starfield)
+            // One-Euro on quaternion components (unit-quaternion/second units)
+            imuFilter: { minCutoff: 1.2, beta: 0.6, dCutoff: 1.0 },
+            compassBlend: 0.02,    // per-event low-pass on the alpha<->compass offset
+            declinationDeg: 0,     // true-north tweak if needed; the N⟲ button overrides it anyway
+            debug: { hud: true, rings: false, plumb: true },  // first-load overlay state
+        };
+
+        // Day colors
+        const DAY_COLORS = {
+            forest: 0x3d6b3d,
+            grass: 0x6b8e4a,
+            arid: 0x9c8565,
+            tropical: 0x228b22,
+            ice: 0xe8e8f0,
+            tundra: 0xa8b498
+        };
+        
+        const NIGHT_COLOR = 0x0a0a12;
+        const INTERIOR_COLOR = 0x1a1a1a;
+        
+        // Expanded cities for realistic night lights - [name, lat, lon, brightness 1-5]
+        const CITIES = [
+            // ASIA - Dense clusters
+            ["Tokyo", 35.68, 139.69, 5], ["Yokohama", 35.44, 139.64, 4], ["Osaka", 34.69, 135.50, 5],
+            ["Nagoya", 35.18, 136.91, 4], ["Sapporo", 43.06, 141.35, 3], ["Fukuoka", 33.59, 130.40, 3],
+            ["Kyoto", 35.01, 135.77, 3], ["Kobe", 34.69, 135.20, 3],
+            ["Beijing", 39.90, 116.41, 5], ["Shanghai", 31.23, 121.47, 5], ["Guangzhou", 23.13, 113.26, 5],
+            ["Shenzhen", 22.54, 114.06, 5], ["Chengdu", 30.57, 104.07, 4], ["Chongqing", 29.56, 106.55, 4],
+            ["Tianjin", 39.14, 117.18, 4], ["Wuhan", 30.58, 114.27, 4], ["Xi'an", 34.27, 108.95, 4],
+            ["Hangzhou", 30.25, 120.17, 4], ["Nanjing", 32.06, 118.80, 4], ["Suzhou", 31.30, 120.62, 3],
+            ["Harbin", 45.75, 126.65, 3], ["Shenyang", 41.80, 123.43, 3], ["Dalian", 38.91, 121.60, 3],
+            ["Qingdao", 36.07, 120.38, 3], ["Zhengzhou", 34.75, 113.62, 3], ["Changsha", 28.23, 112.94, 3],
+            ["Kunming", 25.04, 102.71, 3], ["Xiamen", 24.48, 118.09, 3], ["Fuzhou", 26.07, 119.30, 3],
+            ["Hong Kong", 22.32, 114.17, 5], ["Macau", 22.20, 113.55, 3],
+            ["Seoul", 37.57, 126.98, 5], ["Busan", 35.18, 129.08, 4], ["Incheon", 37.46, 126.71, 3],
+            ["Daegu", 35.87, 128.60, 3],
+            ["Taipei", 25.03, 121.57, 4], ["Kaohsiung", 22.62, 120.31, 3],
+            ["Mumbai", 19.08, 72.88, 5], ["Delhi", 28.61, 77.21, 5], ["Bangalore", 12.97, 77.59, 5],
+            ["Hyderabad", 17.39, 78.49, 4], ["Chennai", 13.08, 80.27, 4], ["Kolkata", 22.57, 88.36, 5],
+            ["Ahmedabad", 23.02, 72.57, 4], ["Pune", 18.52, 73.86, 4], ["Surat", 21.17, 72.83, 3],
+            ["Jaipur", 26.92, 75.79, 3], ["Lucknow", 26.85, 80.95, 3], ["Kanpur", 26.45, 80.35, 3],
+            ["Nagpur", 21.15, 79.09, 3], ["Indore", 22.72, 75.86, 3], ["Patna", 25.59, 85.14, 3],
+            ["Karachi", 24.86, 67.01, 5], ["Lahore", 31.55, 74.34, 4], ["Islamabad", 33.69, 73.06, 3],
+            ["Dhaka", 23.81, 90.41, 5], ["Chittagong", 22.36, 91.78, 3],
+            ["Bangkok", 13.76, 100.50, 5], ["Chiang Mai", 18.79, 98.98, 2],
+            ["Jakarta", -6.21, 106.85, 5], ["Surabaya", -7.25, 112.75, 4], ["Bandung", -6.91, 107.61, 3],
+            ["Medan", 3.59, 98.67, 3], ["Semarang", -6.97, 110.42, 3],
+            ["Singapore", 1.35, 103.82, 5],
+            ["Kuala Lumpur", 3.14, 101.69, 4], ["Penang", 5.42, 100.33, 3], ["Johor Bahru", 1.49, 103.74, 3],
+            ["Manila", 14.60, 120.98, 5], ["Cebu", 10.32, 123.89, 3], ["Davao", 7.07, 125.61, 2],
+            ["Ho Chi Minh", 10.82, 106.63, 5], ["Hanoi", 21.03, 105.85, 4], ["Da Nang", 16.05, 108.22, 2],
+            // MIDDLE EAST
+            ["Dubai", 25.20, 55.27, 5], ["Abu Dhabi", 24.45, 54.37, 4], ["Sharjah", 25.36, 55.39, 3],
+            ["Riyadh", 24.69, 46.72, 4], ["Jeddah", 21.49, 39.19, 4], ["Mecca", 21.43, 39.83, 3],
+            ["Doha", 25.29, 51.53, 4], ["Kuwait City", 29.38, 47.99, 3], ["Manama", 26.23, 50.59, 3],
+            ["Tehran", 35.69, 51.39, 5], ["Isfahan", 32.65, 51.68, 3], ["Mashhad", 36.30, 59.60, 3],
+            ["Baghdad", 33.31, 44.37, 4], ["Basra", 30.51, 47.81, 2],
+            ["Tel Aviv", 32.09, 34.78, 4], ["Jerusalem", 31.77, 35.23, 3], ["Haifa", 32.79, 34.99, 2],
+            ["Amman", 31.95, 35.93, 3], ["Beirut", 33.89, 35.50, 3], ["Damascus", 33.51, 36.29, 3],
+            // EUROPE
+            ["London", 51.51, -0.13, 5], ["Birmingham", 52.49, -1.90, 3], ["Manchester", 53.48, -2.24, 3],
+            ["Liverpool", 53.41, -2.98, 2], ["Leeds", 53.80, -1.55, 2], ["Glasgow", 55.86, -4.25, 3],
+            ["Edinburgh", 55.95, -3.19, 2],
+            ["Paris", 48.86, 2.35, 5], ["Lyon", 45.76, 4.84, 3], ["Marseille", 43.30, 5.37, 3],
+            ["Toulouse", 43.60, 1.44, 2], ["Nice", 43.71, 7.26, 2], ["Bordeaux", 44.84, -0.58, 2],
+            ["Berlin", 52.52, 13.41, 5], ["Hamburg", 53.55, 9.99, 4], ["Munich", 48.14, 11.58, 4],
+            ["Cologne", 50.94, 6.96, 3], ["Frankfurt", 50.11, 8.68, 4], ["Stuttgart", 48.78, 9.18, 3],
+            ["Dusseldorf", 51.23, 6.78, 3], ["Leipzig", 51.34, 12.38, 2], ["Dresden", 51.05, 13.74, 2],
+            ["Madrid", 40.42, -3.70, 5], ["Barcelona", 41.39, 2.17, 4], ["Valencia", 39.47, -0.38, 3],
+            ["Seville", 37.39, -5.98, 3], ["Bilbao", 43.26, -2.93, 2], ["Malaga", 36.72, -4.42, 2],
+            ["Rome", 41.90, 12.50, 5], ["Milan", 45.46, 9.19, 5], ["Naples", 40.85, 14.27, 4],
+            ["Turin", 45.07, 7.69, 3], ["Florence", 43.77, 11.25, 3], ["Venice", 45.44, 12.32, 2],
+            ["Bologna", 44.49, 11.34, 2], ["Genoa", 44.41, 8.93, 2],
+            ["Amsterdam", 52.37, 4.90, 4], ["Rotterdam", 51.92, 4.48, 3], ["The Hague", 52.08, 4.31, 2],
+            ["Brussels", 50.85, 4.35, 4], ["Antwerp", 51.22, 4.40, 3],
+            ["Vienna", 48.21, 16.37, 4], ["Zurich", 47.38, 8.54, 3], ["Geneva", 46.20, 6.14, 2],
+            ["Warsaw", 52.23, 21.01, 4], ["Krakow", 50.06, 19.94, 3], ["Gdansk", 54.35, 18.65, 2],
+            ["Prague", 50.08, 14.44, 4], ["Budapest", 47.50, 19.04, 4],
+            ["Stockholm", 59.33, 18.07, 4], ["Gothenburg", 57.71, 11.97, 2],
+            ["Copenhagen", 55.68, 12.57, 4], ["Oslo", 59.91, 10.75, 3], ["Helsinki", 60.17, 24.94, 3],
+            ["Lisbon", 38.72, -9.14, 4], ["Porto", 41.16, -8.63, 2],
+            ["Athens", 37.98, 23.73, 4], ["Thessaloniki", 40.64, 22.94, 2],
+            ["Dublin", 53.35, -6.26, 3], ["Belfast", 54.60, -5.93, 2],
+            ["Moscow", 55.76, 37.62, 5], ["St Petersburg", 59.93, 30.34, 5],
+            ["Kyiv", 50.45, 30.52, 4], ["Kharkiv", 49.99, 36.23, 3], ["Odesa", 46.48, 30.74, 3],
+            ["Istanbul", 41.01, 28.98, 5], ["Ankara", 39.93, 32.86, 4], ["Izmir", 38.42, 27.14, 3],
+            ["Bucharest", 44.43, 26.10, 4], ["Sofia", 42.70, 23.32, 3], ["Belgrade", 44.82, 20.46, 3],
+            // AFRICA
+            ["Cairo", 30.04, 31.24, 5], ["Alexandria", 31.20, 29.92, 4], ["Giza", 30.01, 31.21, 3],
+            ["Lagos", 6.52, 3.38, 5], ["Kano", 12.00, 8.52, 3], ["Ibadan", 7.38, 3.90, 3],
+            ["Johannesburg", -26.20, 28.05, 5], ["Cape Town", -33.93, 18.42, 4], ["Durban", -29.86, 31.02, 3],
+            ["Pretoria", -25.75, 28.19, 3], ["Port Elizabeth", -33.96, 25.60, 2],
+            ["Nairobi", -1.29, 36.82, 4], ["Mombasa", -4.05, 39.67, 2],
+            ["Addis Ababa", 9.03, 38.74, 4], ["Dar es Salaam", -6.79, 39.21, 3],
+            ["Kinshasa", -4.44, 15.27, 4], ["Luanda", -8.84, 13.23, 3],
+            ["Casablanca", 33.59, -7.62, 4], ["Rabat", 34.02, -6.83, 2], ["Marrakech", 31.63, -8.01, 2],
+            ["Algiers", 36.74, 3.06, 4], ["Tunis", 36.81, 10.17, 3], ["Tripoli", 32.90, 13.19, 2],
+            ["Accra", 5.56, -0.20, 3], ["Dakar", 14.69, -17.44, 3], ["Abidjan", 5.32, -4.00, 3],
+            // OCEANIA
+            ["Sydney", -33.87, 151.21, 5], ["Melbourne", -37.81, 144.96, 5], ["Brisbane", -27.47, 153.03, 4],
+            ["Perth", -31.95, 115.86, 4], ["Adelaide", -34.93, 138.60, 3], ["Gold Coast", -28.02, 153.43, 2],
+            ["Canberra", -35.28, 149.13, 2], ["Newcastle", -32.93, 151.78, 2],
+            ["Auckland", -36.85, 174.76, 4], ["Wellington", -41.29, 174.78, 2], ["Christchurch", -43.53, 172.64, 2],
+            // SOUTH AMERICA (excluded from NA transparency)
+            ["São Paulo", -23.55, -46.63, 5], ["Rio de Janeiro", -22.91, -43.17, 5],
+            ["Brasilia", -15.79, -47.88, 3], ["Salvador", -12.97, -38.50, 3], ["Fortaleza", -3.72, -38.54, 3],
+            ["Belo Horizonte", -19.92, -43.94, 4], ["Curitiba", -25.43, -49.27, 3], ["Recife", -8.05, -34.88, 3],
+            ["Porto Alegre", -30.03, -51.23, 3], ["Manaus", -3.12, -60.02, 2],
+            ["Buenos Aires", -34.60, -58.38, 5], ["Córdoba", -31.42, -64.18, 3], ["Rosario", -32.95, -60.65, 2],
+            ["Mendoza", -32.89, -68.83, 2],
+            ["Lima", -12.05, -77.04, 5], ["Arequipa", -16.40, -71.54, 2],
+            ["Bogotá", 4.71, -74.07, 4], ["Medellín", 6.25, -75.56, 3], ["Cali", 3.45, -76.53, 3],
+            ["Santiago", -33.45, -70.67, 5], ["Valparaíso", -33.05, -71.62, 2],
+            ["Caracas", 10.48, -66.90, 4], ["Maracaibo", 10.64, -71.63, 2],
+            ["Quito", -0.18, -78.47, 3], ["Guayaquil", -2.17, -79.90, 3],
+            ["Montevideo", -34.90, -56.19, 3], ["Asunción", -25.26, -57.58, 2],
+            ["La Paz", -16.50, -68.15, 2], ["Santa Cruz", -17.78, -63.18, 2],
+            // NORTH AMERICA
+            ["New York", 40.71, -74.01, 5], ["Los Angeles", 34.05, -118.24, 5],
+            ["Chicago", 41.88, -87.63, 5], ["Houston", 29.76, -95.37, 4],
+            ["Phoenix", 33.45, -112.07, 4], ["Philadelphia", 39.95, -75.17, 4],
+            ["San Antonio", 29.42, -98.49, 3], ["San Diego", 32.72, -117.16, 4],
+            ["Dallas", 32.78, -96.80, 4], ["San Jose", 37.34, -121.89, 4],
+            ["Austin", 30.27, -97.74, 3], ["San Francisco", 37.77, -122.42, 5],
+            ["Seattle", 47.61, -122.33, 4], ["Denver", 39.74, -104.99, 4],
+            ["Boston", 42.36, -71.06, 4], ["Atlanta", 33.75, -84.39, 4],
+            ["Miami", 25.76, -80.19, 5], ["Minneapolis", 44.98, -93.27, 3],
+            ["Detroit", 42.33, -83.05, 4], ["Portland", 45.52, -122.68, 3],
+            ["Las Vegas", 36.17, -115.14, 4], ["Baltimore", 39.29, -76.61, 3],
+            ["Washington DC", 38.91, -77.04, 5], ["Nashville", 36.16, -86.78, 3],
+            ["Charlotte", 35.23, -80.84, 3], ["Indianapolis", 39.77, -86.16, 3],
+            ["Orlando", 28.54, -81.38, 3], ["Tampa", 27.95, -82.46, 3],
+            ["Pittsburgh", 40.44, -80.00, 3], ["Cleveland", 41.50, -81.69, 3],
+            ["New Orleans", 29.95, -90.07, 3], ["St. Louis", 38.63, -90.20, 3],
+            ["Toronto", 43.65, -79.38, 5], ["Montreal", 45.50, -73.57, 4],
+            ["Vancouver", 49.28, -123.12, 4], ["Calgary", 51.05, -114.07, 3],
+            ["Edmonton", 53.55, -113.49, 3], ["Ottawa", 45.42, -75.70, 3],
+            ["Mexico City", 19.43, -99.13, 5], ["Guadalajara", 20.67, -103.35, 4],
+            ["Monterrey", 25.67, -100.31, 4], ["Tijuana", 32.51, -117.02, 3],
+            ["Puebla", 19.04, -98.21, 3], ["León", 21.13, -101.67, 3],
+        ];
+
+        // ============================================
+        // SCENE SETUP
+        // ============================================
+        let scene, camera, renderer;
+        let globe;
+        let countryMeshes = [];  // For day/night updates
+        let cityLights = [];     // City light objects
+        let simulatedTime = Date.now();
+
+        // Fixed ENU basis at the observer's surface point (computed once in initScene)
+        let surfaceNormal;      // Points away from Earth center (our "up")
+        let tangentNorth;       // Points toward north along the tangent plane
+        let tangentEast;        // Points east along the tangent plane
+        let observerPos = null; // P: the camera anchor point on the sphere surface
+
+        // Debug overlay groups (toggleable)
+        let ringsGroup = null;        // antipode projection rings + fills
+        let antipodeDotGroup = null;  // white antipode dot (pairs with the plumb marker)
+
+        // --- IMU state ----------------------------------------------------
+        // Filled by the DEVICE ORIENTATION section. q maps SCREEN-frame
+        // vectors to ROOM-frame vectors (room = East, North, Up at the
+        // observer). While inactive, the manual `pose` below drives the pane
+        // (desktop testing).
+        const imu = {
+            supported: typeof DeviceOrientationEvent !== 'undefined',
+            active: false,            // true once real events flow (or ?simimu=)
+            q: new THREE.Quaternion(),         // filtered screen->room rotation
+            screenAngleSign: -1,      // UI-rotation correction: Rz(sign * screen.orientation.angle); 'O' flips
+            offSin: 0, offCos: 1,     // circular low-pass of (alpha - trueAlpha) for compass fusion
+            haveCompass: false,
+            northTrimDeg: 0,          // N⟲ button: absorbs declination/compass bias
+            lastEventAt: 0,
+            simulated: false,
+        };
+
+        // --- Manual pane pose (desktop fallback, persisted) ----------------
+        //   pitchDeg   near edge raised = positive  ('[' / ']')
+        //   rollDeg    right edge raised = positive ('9' / '0')
+        //   headingDeg compass bearing of the far edge, 0 = true north (',' / '.')
+        const POSE_KEY = 'nycwindow.pose.v1';
+        const pose = Object.assign(
+            { pitchDeg: 0, rollDeg: 0, headingDeg: 0 },
+            (() => { try { return JSON.parse(localStorage.getItem(POSE_KEY)) || {}; } catch (e) { return {}; } })()
+        );
+        function savePose() { try { localStorage.setItem(POSE_KEY, JSON.stringify(pose)); } catch (e) {} }
+
+        // --- Eye state ------------------------------------------------------
+        // Arms-out posture: eye fixed on the glass normal at eyeDistance.
+        let eyeDistance = CONFIG.WINDOW.eyeDistance;      // pinch-adjustable (m)
+        let eyeMode = 'imu';                              // 'imu' | 'keyboard'
+        const kbEye = { x: 0, y: 0, z: CONFIG.WINDOW.eyeDistance };  // keyboard-override eye
+        let currentEye = { x: 0, y: 0, z: CONFIG.WINDOW.eyeDistance };
+        let eyeStatus = 'MANUAL';
+        let lastFrustum = null;                           // {L,R,B,T} tangents, for HUD
+        let selfTestSummary = null;
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(CONFIG.backgroundColor);
+            
+            // Camera object — its pose and projection are fully managed by
+            // setupWindowCamera()/applyWindowProjection() (off-axis window
+            // model). The constructor args here are immediately superseded.
+            camera = new THREE.PerspectiveCamera(
+                60,
+                window.innerWidth / window.innerHeight,
+                1.0,
+                CONFIG.globeRadius * 50
+            );
+
+            // Observer surface point and ENU basis at NYC
+            observerPos = latLongToVector3(CONFIG.nycLat, CONFIG.nycLon, CONFIG.globeRadius);
+
+            // Surface normal points away from Earth center (our "up" when standing on surface)
+            surfaceNormal = observerPos.clone().normalize();
+
+            // World up (toward north pole)
+            const worldUp = new THREE.Vector3(0, 1, 0);
+
+            // Tangent east = worldUp × surfaceNormal (pointing east along surface)
+            tangentEast = new THREE.Vector3().crossVectors(worldUp, surfaceNormal).normalize();
+
+            // Tangent north = surfaceNormal × tangentEast (pointing north along surface)
+            tangentNorth = new THREE.Vector3().crossVectors(surfaceNormal, tangentEast).normalize();
+
+            // Pin the camera to the surface, axes locked to the screen mapping
+            setupWindowCamera();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Keyboard (desktop) + touch (iPad) input
+            window.addEventListener('keydown', onKeyDown);
+            renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+            setupTouchControls(renderer.domElement);
+            setupTouchButtons();
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const light1 = new THREE.DirectionalLight(0xffffff, 0.6);
+            light1.position.set(5, 5, 5);
+            scene.add(light1);
+            
+            const light2 = new THREE.DirectionalLight(0x88aaff, 0.3);
+            light2.position.set(-5, -5, -5);
+            scene.add(light2);
+            
+            // Globe container
+            globe = new THREE.Group();
+            scene.add(globe);
+            
+            // Add starfield background
+            createStarfield();
+            
+            // Add very transparent ocean sphere
+            createOceanSphere();
+            
+            
+            // Add 2 sq ft reference square at NYC
+            createNYCGroundMarker();
+            
+            // Add projected viewing area at antipode
+            createAntipodeProjection();
+            
+            // Create city lights
+            createCityLights();
+            
+            // Create grid lines (Tropic of Cancer southward only)
+            createGridLines();
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        function createStarfield() {
+            // Create thousands of stars as points
+            const starCount = 8000;
+            const starGeometry = new THREE.BufferGeometry();
+            const starPositions = [];
+            
+            for (let i = 0; i < starCount; i++) {
+                // Random position scaled with globe size
+                const radius = CONFIG.globeRadius * 10 + Math.random() * CONFIG.globeRadius * 10;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                const x = radius * Math.sin(phi) * Math.cos(theta);
+                const y = radius * Math.sin(phi) * Math.sin(theta);
+                const z = radius * Math.cos(phi);
+                
+                starPositions.push(x, y, z);
+            }
+            
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+            
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: Math.sqrt(SCALE) * 1.5,  // Scales with sqrt for visibility
+                sizeAttenuation: true
+            });
+            
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+        
+        function createOceanSphere() {
+            // Very transparent grey sphere representing the oceans
+            // BackSide only - we're looking from outside into the globe
+            const geometry = new THREE.SphereGeometry(CONFIG.globeRadius - 0.01, 64, 64);
+            const material = new THREE.MeshBasicMaterial({
+                color: CONFIG.oceanColor,
+                transparent: true,
+                opacity: 0.12,  // VERY transparent
+                side: THREE.BackSide  // Only inner surface visible
+            });
+            const oceanSphere = new THREE.Mesh(geometry, material);
+            scene.add(oceanSphere);
+        }
+
+        
+        function createNYCGroundMarker() {
+            // 2 sq ft reference square at NYC
+            // Earth radius = 6,371 km, globe radius = 5 units
+            // Scale: 1 unit = 1,274.2 km
+            // Reference square scaled with globe
+            const size = 0.006 * SCALE;
+            const geometry = new THREE.PlaneGeometry(size, size);
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff88,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const marker = new THREE.Mesh(geometry, material);
+            
+            // Position at NYC on globe surface
+            const nycPos = latLongToVector3(CONFIG.nycLat, CONFIG.nycLon, CONFIG.globeRadius + 0.0002 * SCALE);
+            marker.position.copy(nycPos);
+            
+            // Orient to lie flat on the tangent plane (perpendicular to surface normal)
+            marker.lookAt(0, 0, 0);
+            marker.rotateX(Math.PI / 2); // Lay flat
+            
+            scene.add(marker);
+            
+            // Add a small label/outline
+            const outlineGeometry = new THREE.EdgesGeometry(geometry);
+            const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+            const outline = new THREE.LineSegments(outlineGeometry, outlineMaterial);
+            outline.position.copy(nycPos);
+            outline.lookAt(0, 0, 0);
+            outline.rotateX(Math.PI / 2);
+            scene.add(outline);
+        }
+        
+        function createAntipodeProjection() {
+            // Projection circles for different window sizes at NYC
+            // Eye height ~1.7m, looking through transparent ground
+            // Window size -> Cone half-angle -> Angular radius on sphere
+            // 2x2 ft -> 10.2 deg -> 20.6 deg
+            // 4x4 ft -> 19.7 deg -> 41.0 deg
+            // 6x6 ft -> 28.3 deg -> 61.8 deg
+            
+            const projections = [
+                { size: '6x6 ft', angularRadius: 61.8, color: 0x44ff88, fillOpacity: 0.06 },
+                { size: '4x4 ft', angularRadius: 41.0, color: 0x44aaff, fillOpacity: 0.08 },
+                { size: '2x2 ft', angularRadius: 20.6, color: 0xff4422, fillOpacity: 0.12 }
+            ];
+
+            const antipodeLat = CONFIG.antipodeLat;
+            const antipodeLon = CONFIG.antipodeLon;
+
+            // Debug-overlay groups: rings toggle with 'R'; the white antipode
+            // dot toggles with the plumb marker 'P' (they form the live
+            // calibration pair — predicted vs rendered antipode position).
+            ringsGroup = new THREE.Group();
+            antipodeDotGroup = new THREE.Group();
+            scene.add(ringsGroup);
+            scene.add(antipodeDotGroup);
+            
+            projections.forEach((proj, idx) => {
+                const angularRadiusDeg = proj.angularRadius;
+                const heightOffset = 0.001 * SCALE * (idx + 1);
+            
+            // Draw the projection circle ON the sphere surface
+            const ringMaterial = new THREE.LineBasicMaterial({
+                color: proj.color,
+                linewidth: 2
+            });
+            
+            const ringPoints = [];
+            for (let angle = 0; angle <= 360; angle += 2) {
+                // Calculate point on sphere at angularRadius from antipode
+                const bearingRad = angle * Math.PI / 180;
+                const angularRadiusRad = angularRadiusDeg * Math.PI / 180;
+                
+                // Spherical geometry: point at distance from antipode
+                const lat1 = antipodeLat * Math.PI / 180;
+                const lon1 = antipodeLon * Math.PI / 180;
+                
+                const lat2 = Math.asin(
+                    Math.sin(lat1) * Math.cos(angularRadiusRad) +
+                    Math.cos(lat1) * Math.sin(angularRadiusRad) * Math.cos(bearingRad)
+                );
+                const lon2 = lon1 + Math.atan2(
+                    Math.sin(bearingRad) * Math.sin(angularRadiusRad) * Math.cos(lat1),
+                    Math.cos(angularRadiusRad) - Math.sin(lat1) * Math.sin(lat2)
+                );
+                
+                const latDeg = lat2 * 180 / Math.PI;
+                const lonDeg = lon2 * 180 / Math.PI;
+                
+                const point = latLongToVector3(latDeg, lonDeg, CONFIG.globeRadius + heightOffset + 0.001 * SCALE);
+                ringPoints.push(point);
+            }
+            
+            const ringGeometry = new THREE.BufferGeometry().setFromPoints(ringPoints);
+            const ring = new THREE.LineLoop(ringGeometry, ringMaterial);
+            ringsGroup.add(ring);
+            
+            // Add filled area as triangulated mesh on sphere surface
+            const fillMaterial = new THREE.MeshBasicMaterial({
+                color: proj.color,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: proj.fillOpacity
+            });
+            
+            // Create vertices for filled area (fan from center)
+            const vertices = [];
+            const indices = [];
+            
+            // Center point (antipode)
+            const centerPoint = latLongToVector3(antipodeLat, antipodeLon, CONFIG.globeRadius + heightOffset);
+            vertices.push(centerPoint.x, centerPoint.y, centerPoint.z);
+            
+            // Ring points
+            for (let angle = 0; angle <= 360; angle += 5) {
+                const bearingRad = angle * Math.PI / 180;
+                const angularRadiusRad = angularRadiusDeg * Math.PI / 180;
+                
+                const lat1 = antipodeLat * Math.PI / 180;
+                const lon1 = antipodeLon * Math.PI / 180;
+                
+                const lat2 = Math.asin(
+                    Math.sin(lat1) * Math.cos(angularRadiusRad) +
+                    Math.cos(lat1) * Math.sin(angularRadiusRad) * Math.cos(bearingRad)
+                );
+                const lon2 = lon1 + Math.atan2(
+                    Math.sin(bearingRad) * Math.sin(angularRadiusRad) * Math.cos(lat1),
+                    Math.cos(angularRadiusRad) - Math.sin(lat1) * Math.sin(lat2)
+                );
+                
+                const latDeg = lat2 * 180 / Math.PI;
+                const lonDeg = lon2 * 180 / Math.PI;
+                
+                const point = latLongToVector3(latDeg, lonDeg, CONFIG.globeRadius + heightOffset);
+                vertices.push(point.x, point.y, point.z);
+            }
+            
+            // Create triangles (fan)
+            const numPoints = Math.floor(360 / 5) + 1;
+            for (let i = 1; i < numPoints; i++) {
+                indices.push(0, i, i + 1);
+            }
+            indices.push(0, numPoints, 1);  // Close the fan
+            
+            const fillGeometry = new THREE.BufferGeometry();
+            fillGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            fillGeometry.setIndex(indices);
+            
+            const fill = new THREE.Mesh(fillGeometry, fillMaterial);
+            ringsGroup.add(fill);
+
+            });  // End forEach
+            
+            // Center dot at antipode
+            const dotCenter = latLongToVector3(antipodeLat, antipodeLon, CONFIG.globeRadius + 0.005 * SCALE);
+            const dotGeometry = new THREE.SphereGeometry(0.015 * SCALE, 16, 16);
+            const dotMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+            dot.position.copy(dotCenter);
+            antipodeDotGroup.add(dot);
+        }
+        
+        function createCityLights() {
+            CITIES.forEach(city => {
+                const [name, lat, lon, brightness] = city;
+                
+                // North America is now visible - include all cities
+                
+                // Larger, brighter lights - scaled with globe
+                const baseSize = 0.02 * Math.sqrt(SCALE);
+                const size = baseSize + (brightness - 1) * baseSize * 0.75;
+                const geometry = new THREE.SphereGeometry(size, 12, 12);
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0xffeeaa,  // Warmer, brighter yellow
+                    transparent: true,
+                    opacity: 0
+                });
+                
+                const pos = latLongToVector3(lat, lon, CONFIG.globeRadius + 0.002 * SCALE);
+                const light = new THREE.Mesh(geometry, material);
+                light.position.copy(pos);
+                
+                scene.add(light);
+                cityLights.push({ mesh: light, lat, lon, brightness });
+                
+                // Add a glow halo for major cities (brightness >= 4)
+                if (brightness >= 4) {
+                    const glowSize = size * 2.5;
+                    const glowGeometry = new THREE.SphereGeometry(glowSize, 12, 12);
+                    const glowMaterial = new THREE.MeshBasicMaterial({
+                        color: 0xffcc66,
+                        transparent: true,
+                        opacity: 0
+                    });
+                    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                    glow.position.copy(pos);
+                    scene.add(glow);
+                    cityLights.push({ mesh: glow, lat, lon, brightness: brightness * 0.4, isGlow: true });
+                }
+            });
+        }
+        
+        function createGridLines() {
+            // Full globe grid lines
+            const gridMaterial = new THREE.LineBasicMaterial({
+                color: 0x3388aa,  // Teal color
+                transparent: false,
+                opacity: 1.0
+            });
+            
+            // Key latitude lines (full globe)
+            const latitudes = [
+                66.5,    // Arctic Circle
+                23.5,    // Tropic of Cancer
+                0,       // Equator
+                -23.5,   // Tropic of Capricorn
+                -66.5    // Antarctic Circle
+            ];
+            
+            const gridOffset = 0.001 * SCALE;  // Scale grid line height
+            
+            latitudes.forEach(lat => {
+                const points = [];
+                for (let lon = -180; lon <= 180; lon += 3) {
+                    points.push(latLongToVector3(lat, lon, CONFIG.globeRadius + gridOffset));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, gridMaterial);
+                scene.add(line);
+            });
+            
+            // Longitude lines every 30° - full pole to pole
+            for (let lon = -180; lon < 180; lon += 30) {
+                const points = [];
+                for (let lat = 90; lat >= -90; lat -= 3) {
+                    points.push(latLongToVector3(lat, lon, CONFIG.globeRadius + gridOffset));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, gridMaterial);
+                scene.add(line);
+            }
+        }
+        
+        // ============================================
+        // SOLAR POSITION & DAY/NIGHT
+        // ============================================
+        
+        function getSolarPosition() {
+            const now = new Date(simulatedTime);
+            const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+            
+            const start = new Date(now.getUTCFullYear(), 0, 0);
+            const diff = now - start;
+            const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+            
+            // Solar declination (latitude of subsolar point)
+            const declination = 23.44 * Math.sin((2 * Math.PI / 365) * (dayOfYear - 81));
+            
+            // Subsolar longitude
+            const subsolarLon = (12 - utcHours) * 15;
+            
+            return { lat: declination, lon: subsolarLon };
+        }
+        
+        function isInDaylight(lat, lon, solarPos) {
+            const lat1 = solarPos.lat * Math.PI / 180;
+            const lon1 = solarPos.lon * Math.PI / 180;
+            const lat2 = lat * Math.PI / 180;
+            const lon2 = lon * Math.PI / 180;
+            
+            const cosAngle = Math.sin(lat1) * Math.sin(lat2) + 
+                           Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+            const angle = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+            
+            if (angle < 84) return 1;
+            if (angle > 96) return 0;
+            return 1 - (angle - 84) / 12;
+        }
+        
+        function updateDayNight() {
+            const solarPos = getSolarPosition();
+            
+            // Update country colors
+            countryMeshes.forEach(item => {
+                const dayAmount = isInDaylight(item.lat, item.lon, solarPos);
+                const dayColor = new THREE.Color(item.dayColor);
+                const nightColor = new THREE.Color(NIGHT_COLOR);
+                const blended = dayColor.lerp(nightColor, 1 - dayAmount);
+                item.mesh.material.color = blended;
+            });
+            
+            // Update city lights - exaggerated brightness
+            cityLights.forEach(city => {
+                const dayAmount = isInDaylight(city.lat, city.lon, solarPos);
+                const nightAmount = 1 - dayAmount;
+                
+                if (city.isGlow) {
+                    // Glow halos - softer, more spread
+                    city.mesh.material.opacity = Math.pow(nightAmount, 1.5) * (city.brightness / 5) * 0.4;
+                } else {
+                    // Main lights - bright and punchy
+                    city.mesh.material.opacity = Math.pow(nightAmount, 1.5) * (city.brightness / 5) * 1.0;
+                }
+            });
+            
+            // Advance time
+            simulatedTime += 16 * CONFIG.timeSpeed;
+        }
+
+        function onWindowResize() {
+            // The off-axis projection is rebuilt every frame from the live
+            // canvas->glass physical mapping, so only the renderer needs this.
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ============================================
+        // OFF-AXIS WINDOW PROJECTION (the core mechanism)
+        // ============================================
+        // The laptop screen is treated as a physical window into the globe
+        // (fishtank VR / Kooima's generalized perspective projection).
+        //
+        // The camera POSITION stays pinned to the observer surface point P:
+        // at globe scale (1 unit = 254.84 m) the real eye sits ~1.6e-3 units
+        // above the glass — below one fp32 ulp at coordinate 25000, i.e. not
+        // even representable as a distinct GPU vertex-space position. All of
+        // the eye geometry is therefore carried by the asymmetric frustum
+        // tangents (dimensionless, O(1)), which is exact in angle and
+        // numerically ideal. Proven at startup by runProjectionSelfTests().
+
+        // Frustum tangents: eye -> each window edge, in units of ez.
+        // These depend on BOTH distance ez AND lateral offset (ex,ey) —
+        // that coupling IS the head-coupled window effect.
+        function computeFrustumTangents(e, rect) {
+            const ex = e.x - rect.cx, ey = e.y - rect.cy;
+            const ez = Math.max(e.z, 0.05);
+            return {
+                L: (-rect.w / 2 - ex) / ez,
+                R: ( rect.w / 2 - ex) / ez,
+                B: (-rect.h / 2 - ey) / ez,
+                T: ( rect.h / 2 - ey) / ez,
+            };
+        }
+
+        // Physical rectangle of the CANVAS on the glass, in screen-frame
+        // meters. One general formula: fullscreen falls out naturally
+        // (screenX=0, inner==outer==screen => w=glass width, cx=cy=0).
+        // Assumes square pixels and 100% browser zoom (hint recommends
+        // fullscreen, where this is exact).
+        function getCanvasPhysicalRect() {
+            const W = CONFIG.WINDOW;
+            const sw = screen.width || 1, sh = screen.height || 1;
+            const cw = window.innerWidth, ch = window.innerHeight;
+            const mppx = W.screenWidth / sw, mppy = W.screenHeight / sh;
+            // canvas top-left in display px (browser chrome at top, thin side borders)
+            const sideBorder = Math.max(0, (window.outerWidth - cw) / 2);
+            const leftPx = (window.screenX || 0) + sideBorder;
+            const topPx = (window.screenY || 0) + Math.max(0, (window.outerHeight - ch) - sideBorder);
+            const cxPx = leftPx + cw / 2, cyPx = topPx + ch / 2;
+            return {
+                w: cw * mppx,
+                h: ch * mppy,
+                cx: (cxPx - sw / 2) * mppx,   // physical offset of canvas center on the glass
+                cy: (sh / 2 - cyPx) * mppy,   // display px y is DOWN; physical +y is toward the far edge
+            };
+        }
+
+        // Build & assign the off-axis projection for eye e (screen frame, m).
+        // r128-verified signature: makePerspective(left, right, top, bottom,
+        // near, far). Scaling all four bounds by `near` preserves the eye
+        // angles exactly; near/far choose only depth precision (near at
+        // R*1e-3 keeps far-side z-resolution ~6 units vs the 5–10-unit
+        // feature offsets, 25x better than the old near=1.0).
+        function applyWindowProjection(cam, e) {
+            const rect = getCanvasPhysicalRect();
+            const t = computeFrustumTangents(e, rect);
+            const n = CONFIG.globeRadius * CONFIG.WINDOW.nearFactor;
+            const f = CONFIG.globeRadius * CONFIG.WINDOW.farFactor;
+            cam.projectionMatrix.makePerspective(t.L * n, t.R * n, t.T * n, t.B * n, n, f);
+            cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+            cam.near = n; cam.far = f;  // keep fields consistent for any internal consumers
+            lastFrustum = t;
+            return t;
+        }
+
+        // ---- Window orientation in the room (generalized Kooima window) ----
+        // The virtual Earth is anchored to REAL gravity/north: room axes map
+        // to (east, north, up) at the observer point. The screen is a pane
+        // whose orientation in the room is `pose` (heading, then pitch, then
+        // roll — intrinsic). Tilting the pane re-aims it through the fixed
+        // underground panorama; the antipode stays gravity-down regardless.
+        //
+        // Because the eye is measured in the SCREEN frame (webcam rigid to
+        // the glass) and the window stays the z=0 rectangle of that frame,
+        // the off-axis frustum is UNCHANGED by pose — only the camera's
+        // orientation in the virtual world rotates. (The pane's positional
+        // offset when propped up is centimeters = sub-fp32-ulp at globe
+        // scale, so the camera stays at P; same argument as the eye height.)
+
+        // Rotation taking SCREEN-frame vectors to ROOM-frame vectors.
+        // Sign conventions verified by the plumb rule: the white antipode
+        // dot slides toward the LOW edge of a tilted pane, like a marble.
+        function windowRotationMatrix() {
+            const d2r = Math.PI / 180;
+            const m = new THREE.Matrix4().makeRotationZ(-pose.headingDeg * d2r);
+            m.multiply(new THREE.Matrix4().makeRotationX(-pose.pitchDeg * d2r));
+            m.multiply(new THREE.Matrix4().makeRotationY(-pose.rollDeg * d2r));
+            return m;
+        }
+
+        // The ACTIVE screen->room rotation: live IMU when available,
+        // otherwise the manual pose (desktop testing / permission denied).
+        function screenToRoomMatrix() {
+            if (imu.active) return new THREE.Matrix4().makeRotationFromQuaternion(imu.q);
+            return windowRotationMatrix();
+        }
+
+        // Room "down" (gravity, toward the antipode) expressed in screen axes.
+        function downInScreenFrame() {
+            const m = screenToRoomMatrix().elements;  // column-major
+            // R^T · (0,0,-1)_room = -(third row of R)
+            return new THREE.Vector3(-m[2], -m[6], -m[10]);
+        }
+
+        // Where the gravity ray from eye e pierces the glass (screen coords,
+        // meters) — the predicted on-screen position of the antipode. Null if
+        // the pane is tilted near/past vertical so straight-down misses it.
+        function antipodePlumbScreenPoint(e) {
+            const d = downInScreenFrame();
+            if (d.z >= -0.05) return null;
+            const t = e.z / (-d.z);
+            return { x: e.x + t * d.x, y: e.y + t * d.y };
+        }
+
+        // Camera orientation = (east,north,up basis) ∘ (screen->room pose):
+        // camera local axes are the screen's axes placed into the virtual
+        // world. Looks straight down only when the pane lies flat.
+        function updateCameraOrientation() {
+            const basis = new THREE.Matrix4().makeBasis(tangentEast, tangentNorth, surfaceNormal);
+            basis.multiply(screenToRoomMatrix());
+            camera.quaternion.setFromRotationMatrix(basis);
+            camera.updateMatrixWorld(true);
+        }
+
+        // One-time setup: camera ON the surface at P; orientation from pose.
+        function setupWindowCamera() {
+            camera.position.copy(observerPos);
+            updateCameraOrientation();
+            // The stock PerspectiveCamera method would clobber the off-axis
+            // matrix with a symmetric one — route any caller back to ours.
+            camera.updateProjectionMatrix = function () {
+                applyWindowProjection(camera, currentEye);
+            };
+            applyWindowProjection(camera, currentEye);
+        }
+
+        // ============================================
+        // DEVICE ORIENTATION (IMU) -> screen->room rotation
+        // ============================================
+        // W3C deviceorientation (verified against the spec): device frame ==
+        // our screen frame (x right, y top, z out of the glass); world frame
+        // == (East, North, Up); device->world is the intrinsic Z-X'-Y''
+        // product R = Rz(alpha)·Rx(beta)·Ry(gamma). Two platform fixes:
+        //  1. UI rotation: angles are reported in the device's NATURAL frame;
+        //     the CSS/canvas frame is rotated by screen.orientation.angle, so
+        //     post-multiply Rz(screenAngleSign·angle), sign default -1 per the
+        //     Screen Orientation spec. 'O' flips it if a browser disagrees —
+        //     the marble test exposes that in seconds. (Or just lock the
+        //     iPad's rotation and the correction stays constant.)
+        //  2. True north: iOS alpha is gyro-relative (arbitrary zero).
+        //     Safari's webkitCompassHeading h = bearing of the device top,
+        //     CW from north; the spec relation heading = 360 - alpha gives
+        //     trueAlpha = -h. We low-pass the circular offset between gyro
+        //     alpha and trueAlpha: heading becomes compass-accurate while
+        //     staying gyro-smooth. The N⟲ button adds a manual trim on top
+        //     (absorbs magnetic declination and any compass bias).
+        const _qz = new THREE.Quaternion(), _qx = new THREE.Quaternion(),
+              _qy = new THREE.Quaternion(), _qs = new THREE.Quaternion();
+        const _axX = new THREE.Vector3(1, 0, 0), _axY = new THREE.Vector3(0, 1, 0), _axZ = new THREE.Vector3(0, 0, 1);
+        function buildImuQuaternion(out, alphaDeg, betaDeg, gammaDeg, screenAngleDeg) {
+            const d2r = Math.PI / 180;
+            _qz.setFromAxisAngle(_axZ, alphaDeg * d2r);
+            _qx.setFromAxisAngle(_axX, betaDeg * d2r);
+            _qy.setFromAxisAngle(_axY, gammaDeg * d2r);
+            _qs.setFromAxisAngle(_axZ, imu.screenAngleSign * screenAngleDeg * d2r);
+            return out.copy(_qz).multiply(_qx).multiply(_qy).multiply(_qs);
+        }
+
+        function currentScreenAngle() {
+            if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+            return (typeof window.orientation === 'number') ? ((window.orientation % 360) + 360) % 360 : 0;
+        }
+
+        function onDeviceOrientation(ev) {
+            if (imu.simulated) return;
+            if (ev.alpha === null || ev.beta === null || ev.gamma === null) return;
+            let alpha = ev.alpha;
+            const h = ev.webkitCompassHeading;
+            if (typeof h === 'number' && !isNaN(h) && h >= 0) {
+                // circular low-pass of offset = alpha - trueAlpha = alpha + h (+decl)
+                const off = (alpha + h + CONFIG.WINDOW.declinationDeg) * Math.PI / 180;
+                const k = imu.haveCompass ? CONFIG.WINDOW.compassBlend : 1;
+                imu.offSin = imu.offSin * (1 - k) + Math.sin(off) * k;
+                imu.offCos = imu.offCos * (1 - k) + Math.cos(off) * k;
+                imu.haveCompass = true;
+            }
+            if (imu.haveCompass) alpha -= Math.atan2(imu.offSin, imu.offCos) * 180 / Math.PI;
+            alpha += imu.northTrimDeg;
+            const q = buildImuQuaternion(new THREE.Quaternion(), alpha, ev.beta, ev.gamma, currentScreenAngle());
+            imu.q.copy(imuQuatFilter.filter(q, performance.now()));
+            imu.active = true;
+            imu.lastEventAt = performance.now();
+        }
+
+        // iOS 13+: motion access requires a permission request made inside a
+        // user gesture — hence the tap-to-start overlay.
+        async function startImu() {
+            try {
+                if (imu.supported && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const r = await DeviceOrientationEvent.requestPermission();
+                    if (r !== 'granted') throw new Error('motion permission ' + r);
+                }
+                window.addEventListener('deviceorientation', onDeviceOrientation);
+            } catch (err) {
+                console.warn('IMU unavailable -> manual pane pose:', err);
+            }
+            document.getElementById('start-overlay').style.display = 'none';
+        }
+
+        // Compass bearing the screen's far/top edge currently points at.
+        function getFarEdgeBearingDeg() {
+            const m = screenToRoomMatrix().elements;
+            // screen ŷ in room coords = second column = (East, North, Up)
+            return ((Math.atan2(m[4], m[5]) * 180 / Math.PI) + 360) % 360;
+        }
+
+        function clampEye(e) {
+            return {
+                x: Math.max(-0.75, Math.min(0.75, e.x)),
+                y: Math.max(-0.75, Math.min(0.75, e.y)),
+                z: Math.max(0.10, Math.min(1.50, e.z)),
+            };
+        }
+
+        // ============================================
+        // ONE-EURO FILTER (Casiez et al., CHI 2012) — meter/second units
+        // ============================================
+        class OneEuroFilter {
+            constructor(minCutoff, beta, dCutoff) {
+                this.mc = minCutoff; this.beta = beta; this.dc = dCutoff;
+                this.xPrev = null; this.dxPrev = 0; this.tPrev = null;
+            }
+            static alpha(fc, dt) { const tau = 1 / (2 * Math.PI * fc); return 1 / (1 + tau / dt); }
+            reset() { this.xPrev = null; this.dxPrev = 0; this.tPrev = null; }
+            filter(x, tMs) {
+                const t = tMs / 1000;
+                if (this.xPrev === null) { this.xPrev = x; this.tPrev = t; return x; }
+                const dt = Math.max(t - this.tPrev, 1e-3); this.tPrev = t;
+                const aD = OneEuroFilter.alpha(this.dc, dt);
+                this.dxPrev = aD * ((x - this.xPrev) / dt) + (1 - aD) * this.dxPrev;
+                const a = OneEuroFilter.alpha(this.mc + this.beta * Math.abs(this.dxPrev), dt);
+                this.xPrev = a * x + (1 - a) * this.xPrev;
+                return this.xPrev;
+            }
+        }
+        // One-Euro smoothing on quaternion COMPONENTS (hemisphere-corrected,
+        // renormalized). Filtering Euler angles would misbehave near the
+        // beta=±90 gimbal region — exactly the held-upright posture;
+        // component space has no singularities.
+        class QuatOneEuro {
+            constructor(p) {
+                this.f = [0, 1, 2, 3].map(() => new OneEuroFilter(p.minCutoff, p.beta, p.dCutoff));
+                this.prev = null;
+            }
+            filter(q, tMs) {
+                if (this.prev && q.dot(this.prev) < 0) q.set(-q.x, -q.y, -q.z, -q.w);
+                const out = new THREE.Quaternion(
+                    this.f[0].filter(q.x, tMs), this.f[1].filter(q.y, tMs),
+                    this.f[2].filter(q.z, tMs), this.f[3].filter(q.w, tMs)).normalize();
+                this.prev = out.clone();
+                return out;
+            }
+        }
+        const imuQuatFilter = new QuatOneEuro(CONFIG.WINDOW.imuFilter);
+
+        // ============================================
+        // EYE: fixed on the glass normal (arms-out posture); pinch = distance
+        // ============================================
+        function updateEye(nowMs) {
+            if (eyeMode === 'keyboard') {
+                currentEye = { ...kbEye };
+                eyeStatus = 'KEYBOARD';
+                return;
+            }
+            currentEye = { x: 0, y: 0, z: eyeDistance };
+            eyeStatus = imu.active ? (imu.simulated ? 'SIM-IMU' : 'IMU') : 'MANUAL';
+        }
+        
+        // ============================================
+        // INPUT: debug toggles, calibration, keyboard-eye override
+        // ============================================
+        // 'T' toggles keyboard-eye mode: a simulated eye you steer with
+        // arrows/WASD (+/-/wheel for distance) — works with no webcam and
+        // gives deterministic screenshots for testing the projection.
+        function onKeyDown(ev) {
+            if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+            const key = ev.key;
+            switch (key.toLowerCase()) {
+                case 't':
+                    eyeMode = (eyeMode === 'keyboard') ? 'imu' : 'keyboard';
+                    if (eyeMode === 'keyboard') Object.assign(kbEye, clampEye(currentEye));
+                    return;
+                case 'h': CONFIG.WINDOW.debug.hud = !CONFIG.WINDOW.debug.hud; syncDebugDom(); return;
+                case 'r': CONFIG.WINDOW.debug.rings = !CONFIG.WINDOW.debug.rings; syncDebugDom(); return;
+                case 'p': CONFIG.WINDOW.debug.plumb = !CONFIG.WINDOW.debug.plumb; syncDebugDom(); return;
+                case 'f':
+                    if (document.fullscreenElement) document.exitFullscreen();
+                    else document.documentElement.requestFullscreen().catch(() => {});
+                    return;
+                case 'o':  // flip the screen-rotation correction sign (browser disagreement rescue)
+                    imu.screenAngleSign *= -1;
+                    return;
+                case ')':  // Shift+0: reset pose + north trim
+                    Object.assign(pose, { pitchDeg: 0, rollDeg: 0, headingDeg: 0 });
+                    imu.northTrimDeg = 0;
+                    savePose(); updateCameraOrientation();
+                    return;
+            }
+            // Manual pane pose (desktop fallback when no IMU is granted)
+            {
+                const poseStep = ev.shiftKey ? 5 : 1;
+                let posed = true;
+                switch (key) {
+                    case '[': case '{': pose.pitchDeg -= poseStep; break;   // lower the near edge
+                    case ']': case '}': pose.pitchDeg += poseStep; break;   // near edge raised
+                    case '9': case '(': pose.rollDeg -= poseStep; break;    // left edge raised
+                    case '0': pose.rollDeg += poseStep; break;              // right edge raised
+                    case ',': case '<': pose.headingDeg = ((pose.headingDeg - 5) % 360 + 360) % 360; break;
+                    case '.': case '>': pose.headingDeg = ((pose.headingDeg + 5) % 360 + 360) % 360; break;
+                    default: posed = false;
+                }
+                if (posed) {
+                    pose.pitchDeg = Math.max(-80, Math.min(80, pose.pitchDeg));
+                    pose.rollDeg = Math.max(-80, Math.min(80, pose.rollDeg));
+                    savePose(); updateCameraOrientation();
+                    ev.preventDefault();
+                    return;
+                }
+            }
+            if (eyeMode === 'keyboard') {
+                // Keyboard-eye movement
+                const step = ev.shiftKey ? 0.05 : 0.01;
+                let used = true;
+                switch (key) {
+                    case 'ArrowLeft': case 'a': case 'A': kbEye.x -= step; break;
+                    case 'ArrowRight': case 'd': case 'D': kbEye.x += step; break;
+                    case 'ArrowUp': case 'w': case 'W': kbEye.y += step; break;
+                    case 'ArrowDown': case 's': case 'S': kbEye.y -= step; break;
+                    case '+': case '=': kbEye.z += step; break;
+                    case '-': case '_': kbEye.z -= step; break;
+                    default: used = false;
+                }
+                if (used) {
+                    Object.assign(kbEye, clampEye(kbEye));
+                    ev.preventDefault();
+                }
+            }
+        }
+
+        function onWheel(ev) {
+            if (eyeMode !== 'keyboard') return;
+            ev.preventDefault();
+            kbEye.z = clampEye({ ...kbEye, z: kbEye.z + ev.deltaY * 0.0004 }).z;
+        }
+
+        // --- Touch: pinch = eye distance (zoom with physical meaning) -------
+        const _pointers = new Map();
+        let _pinchD0 = 0, _pinchEye0 = 0;
+        function setupTouchControls(el) {
+            el.addEventListener('pointerdown', (ev) => {
+                _pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
+                if (_pointers.size === 2) {
+                    const p = [..._pointers.values()];
+                    _pinchD0 = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
+                    _pinchEye0 = eyeDistance;
+                }
+            });
+            el.addEventListener('pointermove', (ev) => {
+                if (!_pointers.has(ev.pointerId)) return;
+                _pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
+                if (_pointers.size === 2 && _pinchD0 > 0) {
+                    const p = [..._pointers.values()];
+                    const d = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
+                    // fingers apart = zoom in = eye farther = narrower cap
+                    eyeDistance = Math.max(0.20, Math.min(1.20, _pinchEye0 * (d / _pinchD0)));
+                    ev.preventDefault();
+                }
+            }, { passive: false });
+            const drop = (ev) => { _pointers.delete(ev.pointerId); _pinchD0 = 0; };
+            el.addEventListener('pointerup', drop);
+            el.addEventListener('pointercancel', drop);
+            // suppress Safari's own pinch-zoom gesture
+            window.addEventListener('gesturestart', (e) => e.preventDefault());
+        }
+
+        function setupTouchButtons() {
+            document.getElementById('start-btn').addEventListener('click', startImu);
+            document.getElementById('tb-hud').addEventListener('click', () => {
+                CONFIG.WINDOW.debug.hud = !CONFIG.WINDOW.debug.hud; syncDebugDom();
+            });
+            document.getElementById('tb-rings').addEventListener('click', () => {
+                CONFIG.WINDOW.debug.rings = !CONFIG.WINDOW.debug.rings; syncDebugDom();
+            });
+            // Point the TOP edge of the iPad at true north, tap: heading reads 0.
+            // bearing = 360 - alpha and trim adds to alpha, so zeroing the
+            // bearing means trim += current bearing.
+            document.getElementById('tb-north').addEventListener('click', () => {
+                imu.northTrimDeg = ((imu.northTrimDeg + getFarEdgeBearingDeg()) % 360 + 360) % 360;
+            });
+        }
+
+        function syncDebugDom() {
+            const D = CONFIG.WINDOW.debug;
+            document.getElementById('hud').style.display = D.hud ? 'block' : 'none';
+            document.getElementById('crosshair').style.display = D.plumb ? 'block' : 'none';
+            if (ringsGroup) ringsGroup.visible = D.rings;
+            if (antipodeDotGroup) antipodeDotGroup.visible = D.plumb;
+        }
+
+        // ============================================
+        // DEBUG UI: HUD, plumb marker
+        // ============================================
+        let hudLastUpdate = 0, fpsFrames = 0, fpsLast = 0, fpsValue = 0;
+        function updateDebugUI(nowMs) {
+            const D = CONFIG.WINDOW.debug;
+            fpsFrames++;
+            if (nowMs - fpsLast > 1000) {
+                fpsValue = Math.round(fpsFrames * 1000 / (nowMs - fpsLast));
+                fpsFrames = 0; fpsLast = nowMs;
+            }
+
+            // Plumb marker: predicted screen position of the antipode — where
+            // the gravity ray from the eye pierces the glass (self-test T1).
+            // Flat pane: directly beneath the eye. Tilted pane: slides toward
+            // the LOW edge. The rendered white dot must sit inside it always.
+            if (D.plumb) {
+                const ch = document.getElementById('crosshair');
+                const s = antipodePlumbScreenPoint(currentEye);
+                if (s) {
+                    const rect = getCanvasPhysicalRect();
+                    const ndcX = 2 * (s.x - rect.cx) / rect.w;
+                    const ndcY = 2 * (s.y - rect.cy) / rect.h;
+                    ch.style.visibility = 'visible';
+                    ch.style.left = ((ndcX + 1) / 2 * window.innerWidth) + 'px';
+                    ch.style.top = ((1 - ndcY) / 2 * window.innerHeight) + 'px';
+                } else {
+                    ch.style.visibility = 'hidden';  // pane near vertical: antipode not through the glass
+                }
+            }
+
+            if (D.hud && nowMs - hudLastUpdate > 200) {
+                hudLastUpdate = nowMs;
+                const t = lastFrustum;
+                const deg = (x) => Math.atan(Math.abs(x)) * 180 / Math.PI;
+                // pane attitude from the ACTIVE matrix (IMU or manual):
+                // tilt = angle of the glass normal from vertical; bearing of far edge
+                const m = screenToRoomMatrix().elements;
+                const tiltDeg = Math.acos(Math.max(-1, Math.min(1, m[10]))) * 180 / Math.PI;
+                const bearing = getFarEdgeBearingDeg();
+                const lines = [
+                    `status ${eyeStatus}   ${imu.haveCompass ? 'compass ✓' : 'compass —'}   ${fpsValue} fps`,
+                    `eye distance ${(currentEye.z * 100).toFixed(0)} cm (pinch)   θ edges L/R/B/T = ${deg(t.L).toFixed(1)}/${deg(t.R).toFixed(1)}/${deg(t.B).toFixed(1)}/${deg(t.T).toFixed(1)}°`,
+                    `pane: tilt ${tiltDeg.toFixed(1)}° from flat   far edge → ${bearing.toFixed(0)}°${bearing < 3 || bearing > 357 ? ' (N)' : ''}   far cap L/R = ${(2 * deg(t.L)).toFixed(1)}/${(2 * deg(t.R)).toFixed(1)}°`,
+                    selfTestSummary || 'self-tests: running…',
+                    `mode ${eyeMode}${eyeMode === 'keyboard' ? '  (arrows/WASD move · +/-/wheel distance · T back to IMU)' : ''}`,
+                ];
+                document.getElementById('hud').textContent = lines.join('\n');
+            }
+        }
+
+        // ============================================
+        // PROJECTION SELF-TESTS (webcam-free; prove the fidelity-critical math)
+        // ============================================
+        // T1 antipode plumb invariant — for ANY eye e and ANY pane pose, the
+        //    antipode must render where the GRAVITY ray from the eye pierces
+        //    the glass (antipodePlumbScreenPoint). Flat pane, eye centered =>
+        //    exact center px. Heading must not move it (down is invariant
+        //    under rotation about the vertical).
+        // T2 2θ exit relation — a pixel ray at angle θ from the inward normal
+        //    exits the globe at central angle exactly 2θ from the antipode
+        //    (chord geometry: t = 2R·cosθ) — pose-independent sphere geometry.
+        //    Checked through Raycaster (exercises projectionMatrixInverse)
+        //    AND against analytic tangents.
+        // T3 matrix round-trip — recover L,R,T,B,near,far from the assigned
+        //    matrix; guards the makePerspective arg order and any clobbering.
+        // T4 ring agreement (info) — default-eye far-side cap vs the legacy
+        //    41.0° "4x4 ft" ring drawn by createAntipodeProjection().
+        function runProjectionSelfTests() {
+            const W = CONFIG.WINDOW;
+            const R = CONFIG.globeRadius;
+            const A = observerPos.clone().negate();  // exact antipode
+            const eyes = [
+                { x: 0, y: 0, z: 0.40 }, { x: 0, y: 0, z: 0.80 },
+                { x: 0.15, y: 0, z: 0.40 }, { x: -0.15, y: 0, z: 0.40 },
+                { x: 0, y: 0.10, z: 0.40 }, { x: 0, y: -0.10, z: 0.40 },
+                { x: 0.20, y: 0.15, z: 0.30 }, { x: -0.25, y: -0.20, z: 0.60 },
+                { x: 0.05, y: -0.12, z: 0.25 }, { x: 0.40, y: 0.30, z: 0.15 },
+                { x: -0.32, y: 0.21, z: 1.10 }, { x: 0.013, y: -0.007, z: 0.437 },
+            ];
+            // Second rect exercises the windowed-canvas (offset) path
+            const rects = [getCanvasPhysicalRect(), { w: 0.21, h: 0.13, cx: 0.03, cy: -0.02 }];
+            // Pane poses: flat, pitched, rolled, mixed-with-heading
+            const poseCases = [
+                { pitchDeg: 0, rollDeg: 0, headingDeg: 0 },
+                { pitchDeg: 15, rollDeg: 0, headingDeg: 0 },
+                { pitchDeg: -10, rollDeg: 0, headingDeg: 0 },
+                { pitchDeg: 0, rollDeg: 8, headingDeg: 0 },
+                { pitchDeg: 12, rollDeg: -6, headingDeg: 40 },
+            ];
+            const ndcSamples = [
+                [0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1],
+                [0.337, -0.821], [-0.654, 0.112], [0.918, 0.444], [-0.207, -0.355],
+            ];
+            const ray = new THREE.Raycaster();
+            const inwardNormal = surfaceNormal.clone().negate();
+            const savedPose = { ...pose };
+            const savedImuActive = imu.active;
+            imu.active = false;  // tests drive the manual-pose path deterministically
+            let t1Max = 0, t1HeadingMax = 0, t2MaxAngle = 0, t2MaxDir = 0, t2MaxSphere = 0, t3Max = 0;
+
+            // T5 — the IMU quaternion path must equal the manual-matrix path:
+            // pose (pitch p, roll r, heading hd) == deviceorientation
+            // (alpha=-hd, beta=-p, gamma=-r) at screen angle 0, by the W3C
+            // Z-X'-Y'' convention. |q·q'| = 1 within fp for every pose case.
+            let t5Max = 0;
+            for (const pc of poseCases) {
+                Object.assign(pose, pc);
+                const qManual = new THREE.Quaternion().setFromRotationMatrix(windowRotationMatrix());
+                const qImu = buildImuQuaternion(new THREE.Quaternion(), -pc.headingDeg, -pc.pitchDeg, -pc.rollDeg, 0);
+                t5Max = Math.max(t5Max, Math.abs(1 - Math.abs(qManual.dot(qImu))));
+            }
+
+            for (const pc of poseCases) {
+                Object.assign(pose, pc);
+                updateCameraOrientation();
+                for (const rect of rects) {
+                    for (const e of eyes) {
+                        const tg = computeFrustumTangents(e, rect);
+                        const n = R * W.nearFactor, f = R * W.farFactor;
+                        camera.projectionMatrix.makePerspective(tg.L * n, tg.R * n, tg.T * n, tg.B * n, n, f);
+                        camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+
+                        // T1 — antipode at the gravity-plumb point on the glass
+                        const p = A.clone().project(camera);
+                        const s = antipodePlumbScreenPoint(e);
+                        t1Max = Math.max(t1Max,
+                            Math.abs(p.x - 2 * (s.x - rect.cx) / rect.w),
+                            Math.abs(p.y - 2 * (s.y - rect.cy) / rect.h));
+
+                        // T1b — heading alone must not move the plumb point
+                        Object.assign(pose, { ...pc, headingDeg: pc.headingDeg + 137 });
+                        const s2 = antipodePlumbScreenPoint(e);
+                        t1HeadingMax = Math.max(t1HeadingMax, Math.abs(s2.x - s.x), Math.abs(s2.y - s.y));
+                        Object.assign(pose, pc);
+
+                        // T2 — exit point at 2θ from the antipode, per sample pixel
+                        for (const [nx, ny] of ndcSamples) {
+                            ray.setFromCamera({ x: nx, y: ny }, camera);
+                            const d = ray.ray.direction;
+                            // analytic direction from the tangents, camera->world
+                            const dAn = new THREE.Vector3(
+                                tg.L + (nx + 1) / 2 * (tg.R - tg.L),
+                                tg.B + (ny + 1) / 2 * (tg.T - tg.B),
+                                -1).normalize().applyQuaternion(camera.quaternion);
+                            t2MaxDir = Math.max(t2MaxDir, Math.abs(1 - d.dot(dAn)));
+                            const cosTheta = d.dot(inwardNormal);
+                            // Tilted panes can aim some pixels above the horizon
+                            // (those rays exit to the sky — physically correct);
+                            // the 2θ relation applies to into-the-Earth rays.
+                            if (cosTheta <= 1e-6) continue;
+                            const theta = Math.acos(Math.min(1, Math.max(-1, cosTheta)));
+                            const exit = observerPos.clone().addScaledVector(d, 2 * R * cosTheta);
+                            t2MaxSphere = Math.max(t2MaxSphere, Math.abs(exit.length() - R) / R);
+                            t2MaxAngle = Math.max(t2MaxAngle, Math.abs(exit.angleTo(A) - 2 * theta));
+                        }
+
+                        // T3 — recover the bounds from the matrix elements
+                        const te = camera.projectionMatrix.elements;
+                        const nRec = te[14] / (te[10] - 1);
+                        const fRec = te[14] / (te[10] + 1);
+                        const rel = (a, b) => Math.abs(a - b) / Math.max(1e-12, Math.abs(b));
+                        t3Max = Math.max(t3Max,
+                            rel((te[8] - 1) / te[0], tg.L), rel((te[8] + 1) / te[0], tg.R),
+                            rel((te[9] - 1) / te[5], tg.B), rel((te[9] + 1) / te[5], tg.T),
+                            rel(nRec, n), rel(fRec, f));
+                    }
+                }
+            }
+            Object.assign(pose, savedPose);
+            imu.active = savedImuActive;
+            updateCameraOrientation();
+
+            const capDefault = 2 * Math.atan((W.screenWidth / 2) / W.eyeDistance) * 180 / Math.PI;
+            const ringDelta = Math.abs(capDefault - 41.0);
+            const t1ok = t1Max < 1e-9 && t1HeadingMax < 1e-12;
+            const t2ok = t2MaxAngle < 1e-6 && t2MaxDir < 1e-9 && t2MaxSphere < 1e-9;
+            const t3ok = t3Max < 1e-9;
+            const t5ok = t5Max < 1e-12;
+            const pass = t1ok && t2ok && t3ok && t5ok;
+
+            selfTestSummary = `self-tests ${pass ? 'PASS' : 'FAIL'}   T1${t1ok ? '✓' : '✗'} T2${t2ok ? '✓' : '✗'} T3${t3ok ? '✓' : '✗'} T5${t5ok ? '✓' : '✗'}   T4 cap ${capDefault.toFixed(1)}°`;
+            console.log('[window-projection self-tests]');
+            console.table({
+                'T1 antipode at gravity-plumb point (max |Δndc|)': { value: t1Max.toExponential(2), pass: t1ok },
+                'T1b heading leaves plumb fixed (max |Δm|)': { value: t1HeadingMax.toExponential(2), pass: t1ok },
+                'T2 exit=2θ (max |Δ| rad)': { value: t2MaxAngle.toExponential(2), pass: t2ok },
+                'T2 raycast vs analytic dir (max |1-dot|)': { value: t2MaxDir.toExponential(2), pass: t2ok },
+                'T2 exit on sphere (max rel)': { value: t2MaxSphere.toExponential(2), pass: t2ok },
+                'T3 matrix round-trip (max rel err)': { value: t3Max.toExponential(2), pass: t3ok },
+                'T5 IMU quaternion ≡ manual matrix (max |1-|q·q\'||)': { value: t5Max.toExponential(2), pass: t5ok },
+                'T4 default-eye cap (info)': { value: `${capDefault.toFixed(2)}° (Δ41.0°-ring ${ringDelta.toFixed(2)}°)`, pass: true },
+            });
+            console.log(pass ? '[window-projection self-tests] ALL PASS'
+                             : '[window-projection self-tests] FAILURE — see table');
+            // restore the live projection
+            applyWindowProjection(camera, currentEye);
+            return pass;
+        }
+
+        // ============================================
+        // URL PARAMS (deterministic testing)
+        //   ?kb=1&ex=0.1&ey=0&ez=0.4  start in keyboard-eye mode at that eye
+        //   ?dist=0.55                set eyeDistance
+        //   ?overlays=0               all debug overlays off
+        //   ?hud=0&rings=1&plumb=1    individual overlay control
+        //   ?pitch=&roll=&heading=    manual pane pose (session-only)
+        //   ?simimu=a,b,g[,phi]       static simulated deviceorientation
+        //                             (alpha,beta,gamma deg [+screen angle])
+        // ============================================
+        function applyUrlParams() {
+            const q = new URLSearchParams(location.search);
+            if (q.get('overlays') === '0') {
+                Object.assign(CONFIG.WINDOW.debug, { hud: false, rings: false, plumb: false });
+            }
+            for (const key of ['hud', 'rings', 'plumb']) {
+                if (q.has(key)) CONFIG.WINDOW.debug[key] = q.get(key) !== '0';
+            }
+            if (q.has('dist')) {
+                eyeDistance = Math.max(0.20, Math.min(1.20, parseFloat(q.get('dist')) || eyeDistance));
+            }
+            if (q.get('kb') === '1') {
+                eyeMode = 'keyboard';
+                if (q.has('ex')) kbEye.x = parseFloat(q.get('ex'));
+                if (q.has('ey')) kbEye.y = parseFloat(q.get('ey'));
+                if (q.has('ez')) kbEye.z = parseFloat(q.get('ez'));
+                Object.assign(kbEye, clampEye(kbEye));
+            }
+            // Manual pane pose overrides (session-only, not persisted from URL)
+            if (q.has('pitch')) pose.pitchDeg = parseFloat(q.get('pitch')) || 0;
+            if (q.has('roll')) pose.rollDeg = parseFloat(q.get('roll')) || 0;
+            if (q.has('heading')) pose.headingDeg = parseFloat(q.get('heading')) || 0;
+            // Simulated IMU for headless verification
+            if (q.has('simimu')) {
+                const v = q.get('simimu').split(',').map(Number);
+                if (v.length >= 3 && v.every(x => !isNaN(x))) {
+                    buildImuQuaternion(imu.q, v[0], v[1], v[2], v.length > 3 ? v[3] : 0);
+                    imu.active = true;
+                    imu.simulated = true;
+                }
+            }
+            // Testing/desktop: skip the tap-to-start overlay
+            if (q.get('kb') === '1' || q.has('simimu') || q.has('pitch') || q.has('heading')) {
+                document.getElementById('start-overlay').style.display = 'none';
+            }
+        }
+
+        // ============================================
+        // COORDINATE CONVERSION
+        // ============================================
+        
+        function latLongToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            
+            return new THREE.Vector3(
+                -radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.cos(phi),
+                radius * Math.sin(phi) * Math.sin(theta)
+            );
+        }
+
+        // ============================================
+        // CHECK IF IN NORTH AMERICA
+        // ============================================
+        
+        function isInNorthAmerica(lat, lon) {
+            // Rough bounding box for North America (including Central America & Caribbean)
+            // Main continent
+            if (lat > 15 && lat < 85 && lon > -170 && lon < -50) return true;
+            // Alaska extension
+            if (lat > 50 && lat < 72 && lon > -180 && lon < -130) return true;
+            // Central America
+            if (lat > 7 && lat < 25 && lon > -120 && lon < -60) return true;
+            return false;
+        }
+
+        // ============================================
+        // TERRAIN COLOR
+        // ============================================
+        
+        function getTerrainColor(lat, lon) {
+            const absLat = Math.abs(lat);
+            
+            if (absLat > 65) return DAY_COLORS.ice;
+            if (absLat > 55) return DAY_COLORS.tundra;
+            
+            // Arid regions
+            if ((lat > 15 && lat < 35 && lon > -20 && lon < 60) ||
+                (lat > -35 && lat < -20 && lon > 115 && lon < 145)) {
+                return DAY_COLORS.arid;
+            }
+            
+            if (absLat < 20) return DAY_COLORS.tropical;
+            if (absLat < 40) return DAY_COLORS.grass;
+            
+            return DAY_COLORS.forest;
+        }
+
+        // ============================================
+        // GEOMETRY CREATION
+        // ============================================
+        
+        function createCountryMesh(coordinates, properties) {
+            coordinates.forEach(ring => {
+                if (!ring || ring.length < 3) return;
+                
+                // Calculate centroid
+                let centerLat = 0, centerLon = 0;
+                ring.forEach(coord => {
+                    centerLon += coord[0];
+                    centerLat += coord[1];
+                });
+                centerLat /= ring.length;
+                centerLon /= ring.length;
+                
+                // North America is now visible
+                
+                const terrainColor = getTerrainColor(centerLat, centerLon);
+                
+                const flatPoints = [];
+                ring.forEach(coord => flatPoints.push(coord[0], coord[1]));
+                
+                let triangleIndices;
+                try {
+                    triangleIndices = earcut(flatPoints);
+                } catch (e) { return; }
+                
+                if (triangleIndices.length < 3) return;
+                
+                const vertices = [];
+                ring.forEach(coord => {
+                    const v = latLongToVector3(coord[1], coord[0], CONFIG.globeRadius);
+                    vertices.push(v.x, v.y, v.z);
+                });
+                
+                // Front face (exterior)
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geometry.setIndex(triangleIndices);
+                geometry.computeVertexNormals();
+                
+                const frontMaterial = new THREE.MeshPhongMaterial({
+                    color: terrainColor,
+                    side: THREE.FrontSide,
+                    flatShading: false,
+                    shininess: 5
+                });
+                
+                const frontMesh = new THREE.Mesh(geometry, frontMaterial);
+                globe.add(frontMesh);
+                
+                // Track for day/night updates
+                countryMeshes.push({
+                    mesh: frontMesh,
+                    lat: centerLat,
+                    lon: centerLon,
+                    dayColor: terrainColor
+                });
+                
+                // Back face (interior) - dark grey
+                const backGeometry = geometry.clone();
+                const backMaterial = new THREE.MeshBasicMaterial({
+                    color: INTERIOR_COLOR,
+                    side: THREE.BackSide
+                });
+                
+                const backMesh = new THREE.Mesh(backGeometry, backMaterial);
+                globe.add(backMesh);
+            });
+        }
+
+        // ============================================
+        // GEOJSON LOADING
+        // ============================================
+        
+        async function loadGeoJSON() {
+            const sources = [
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson',
+                'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson'
+            ];
+            
+            for (const url of sources) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) return await response.json();
+                } catch (e) {
+                    console.warn('Failed:', url);
+                }
+            }
+            throw new Error('All sources failed');
+        }
+
+        function processGeoJSON(geojson) {
+            geojson.features.forEach(feature => {
+                const geometry = feature.geometry;
+                const properties = feature.properties || {};
+                
+                if (geometry.type === 'Polygon') {
+                    createCountryMesh(geometry.coordinates, properties);
+                } else if (geometry.type === 'MultiPolygon') {
+                    geometry.coordinates.forEach(polygon => {
+                        createCountryMesh(polygon, properties);
+                    });
+                }
+            });
+        }
+
+        // ============================================
+        // ANIMATION
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = performance.now();
+            updateEye(now);                              // fixed-eye / keyboard
+            updateCameraOrientation();                   // IMU (or manual) pane pose -> camera
+            applyWindowProjection(camera, currentEye);   // eye -> off-axis frustum
+            updateDayNight();
+            renderer.render(scene, camera);
+            updateDebugUI(now);
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        async function init() {
+            applyUrlParams();
+            initScene();
+            syncDebugDom();
+            runProjectionSelfTests();
+
+            try {
+                const geojson = await loadGeoJSON();
+                processGeoJSON(geojson);
+                document.getElementById('loading').style.display = 'none';
+                animate();
+            } catch (error) {
+                console.error('Init failed:', error);
+                document.getElementById('loading').innerHTML = 'Failed to load data';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
+

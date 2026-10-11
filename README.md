@@ -1,12 +1,22 @@
 # Antipode
 
-Point your phone at the ground and see the far side of the Earth drawn on the camera
-image, as if the planet were transparent. Straight down is your exact antipode; tilting
-toward the horizon reveals coastlines closer to home — the horizon itself is your own
+If the Earth were transparent, what would you see beneath your feet? A family of
+single-file web apps that draw the far side of the planet — live, correctly oriented,
+locked to the world. Straight down is your exact antipode; the horizon is your own
 position, in every direction at once.
 
-Everything is one file: **`index.html`** (inline CSS + JS, inline coastline data,
-no build step, no frameworks, no network use after load).
+**`index.html`** is the hub: pick your device (phone / laptop / monitor / none) and it
+routes you to the right app. The apps:
+
+| path | app | device |
+|---|---|---|
+| `ar/` | **Antipode AR** — far-side coastlines over the live camera feed; no build step, no frameworks, no network use after load | phone |
+| `window-imu/` | **Earth Window (IMU)** — tilt the device like a pane of glass; sensors only, no camera | phone / tablet |
+| `window/` | **Earth Window (head-tracked)** — webcam head tracking turns the screen into a literal window with parallax | laptop |
+| `fly/` | **Fly Through** — free-flying 3D Earth, WASD + mouse | monitor |
+| `circle/` | **The Circle at Your Feet** — if the ground were a glass circle of radius r, how much of the far side could you see? Cross-section + far-side map; radius = your height ⇒ half the planet | anything |
+| `aim/` | **Arm Aim** — where to point your arm to aim at any city through the Earth | other |
+| `extras/` | earlier experiments (first sketch, fly v1, orbit globes, day/night) | — |
 
 ## Run it on a phone
 
@@ -17,11 +27,12 @@ Sensors and camera require HTTPS, so serve the folder over TLS on your LAN:
 ```
 
 then open `https://<this-mac's-ip>:8443` on the phone (same Wi-Fi) and accept the
-self-signed-certificate warning. Tap **Start** and grant motion, location and camera
-permission. Works in iOS Safari and Android Chrome.
+self-signed-certificate warning. In the AR app, tap **Start** and grant motion, location
+and camera permission. Works in iOS Safari and Android Chrome. (Hosted over real HTTPS,
+e.g. GitHub Pages, no certificate warning appears.)
 
-On a desktop browser (no motion sensors) it falls back to drag-to-look / scroll-to-zoom,
-which is handy for trying other locations via the manual lat/lon input.
+On a desktop browser (no motion sensors) the AR app falls back to drag-to-look /
+scroll-to-zoom, which is handy for trying other locations via the manual lat/lon input.
 
 ## Controls (⚙)
 
@@ -57,7 +68,7 @@ but appears to the *west* on screen. That is correct.
 - `tools/build_data.py <ne_110m_land.geojson> <outdir>` — regenerates the encoded
   coastline string (and re-verifies the projection against the spec's acceptance
   table). Source data: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson
-- `node test/core-test.mjs` — runs the app's own self-test suite plus a deep
+- `node test/core-test.mjs` — runs the AR app's own self-test suite plus a deep
   round-trip of the inline data against the Python reference decode.
 - `node test/dom-smoke.mjs` — loads the full app under a stub DOM, presses Start,
   feeds synthetic GPS + orientation events, and checks what got drawn.
