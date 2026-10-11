@@ -75,6 +75,13 @@
 <h1>The Circle at Your Feet</h1>
 <p class="q">If the ground were a glass window — a circle of radius <span class="mono">r</span> centered
 at your feet, Earth transparent below — how much of the far side of the planet could you see through it?</p>
+<p class="q">To make it physical: drop a <a href="#" id="exHoop">hula hoop</a> on the ground around your
+feet. Standing in New York, through that hoop you'd see a bit of Australia and a sliver of Antarctica,
+across a patch of the Indian Ocean. Stand in the <a href="#" id="exCourt">center circle of a basketball
+court</a> and the window shows more than half the planet.</p>
+<p class="q" style="font-size:13.5px;color:var(--faint)">And if "everything is down" sounds too strong:
+down means anywhere below the horizontal. The only part of the world that <i>isn't</i> down is the thin
+disc of ground around you — the part you can already see the ordinary way.</p>
 
 <div class="controls">
   <div class="ctl">
@@ -146,7 +153,7 @@ at your feet, Earth transparent below — how much of the far side of the planet
 </details>
 
 <footer>
-  Part of <a href="../">Antipode</a> — see it live on your phone with the
+  Part of <a href="../">Everything Is Down</a> — see it live on your phone with the
   <a href="../ar/">camera AR app</a>. Coastlines: Natural Earth 110m (public domain).
 </footer>
 
@@ -527,6 +534,7 @@ var PRESETS = [
   { n: 'hula hoop', r: 0.45 },
   { n: 'trampoline', r: 2.13 },
   { n: 'your height', r: null, hot: true },       // r = h -> half the planet
+  { n: 'basketball center circle', r: 1.8 },
   { n: 'basketball court', r: 7.5 },
   { n: 'soccer pitch', r: 34 },
   { n: 'city block', r: 80 },
@@ -581,6 +589,18 @@ document.getElementById('gpsBtn').addEventListener('click', function () {
     setLoc(pos.coords.latitude, pos.coords.longitude);
   }, function () { alert('Location unavailable — type lat/lon instead.'); });
 });
+
+function exampleClick(id, r) {
+  document.getElementById(id).addEventListener('click', function (e) {
+    e.preventDefault();
+    S.r = r; S.selCity = null;
+    document.getElementById('rSlider').value = rToSlider(S.r);
+    render();
+    document.getElementById('xsec').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+}
+exampleClick('exHoop', 0.45);
+exampleClick('exCourt', 1.8);
 
 /* boot */
 document.getElementById('latIn').value = S.lat.toFixed(4);

@@ -1,9 +1,15 @@
-# Antipode
+# Everything Is Down: Seeing Through the Earth
 
-If the Earth were transparent, what would you see beneath your feet? A family of
-single-file web apps that draw the far side of the planet — live, correctly oriented,
-locked to the world. Straight down is your exact antipode; the horizon is your own
-position, in every direction at once.
+**The world is *down*, not around!** When we think about where the rest of the world is,
+we think of places on a map. But relative to you, right now, nearly all of it is beneath
+your feet — somewhere you could point to directly, through thousands of miles of earth.
+A family of single-file web apps draws the far side of the planet — live, correctly
+oriented, locked to the world. Straight down is your exact antipode; the horizon is your
+own position, in every direction at once.
+
+(To be precise about "everything": down means anywhere below the horizontal. The only part
+of the planet you *can't* see by looking down into the earth is the thin disc of surface
+around you — the part you can see the ordinary way.)
 
 **`index.html`** is the hub: pick your device (phone / laptop / monitor / none) and it
 routes you to the right app. The apps:
