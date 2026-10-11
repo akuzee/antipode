@@ -30,22 +30,16 @@
   .dev small { color:var(--faint); display:block; font-size:11.5px; margin-top:3px; }
 
 
-  .menu { list-style:none; padding:0; margin:0; }
-  .menu li { border-bottom:1px solid rgba(120,160,200,.14); padding:9px 2px; font-size:14.5px; }
-  .menu li:last-child { border:none; }
-  .menu .n { font-weight:600; }
-  .menu .d { color:var(--faint); }
-  .menu .b { display:inline-block; font-size:10.5px; border:1px solid var(--line); border-radius:5px;
     padding:0 6px; margin-left:8px; color:var(--dim); vertical-align:1px; }
-  footer { margin-top:40px; color:var(--faint); font-size:13px; }
 </style>
 </head>
 <body>
 
 <h1>Antipode</h1>
-<p class="tag">If the Earth were transparent, what would you see beneath your feet?
-These apps draw the far side of the planet — live, correctly oriented, locked to the world.
-Straight down is your exact antipode; the horizon is your own position, in every direction at once.</p>
+<p class="tag">The Earth, made transparent. Look straight down and you're looking at your
+antipode — the far side of the world, upside-down beneath your shoes. Tilt away from it and
+you sweep across the rest of the planet, out to the horizon, which is your own position in
+every direction at once. These apps draw what you'd see, live, locked to the world as you move.</p>
 
 <h2>What are you using?</h2>
 <div class="devices" id="devices">
@@ -55,50 +49,5 @@ Straight down is your exact antipode; the horizon is your own position, in every
   <a class="dev" href="circle/"><span class="ico">🤷</span>None of these<small>just curiosity</small></a>
 </div>
 
-<p style="margin-top:22px"><a href="#" id="allLink">all the apps →</a></p>
-
-<div id="all" hidden>
-<h2>Everything</h2>
-<ul class="menu">
-  <li><a class="n" href="ar/">Antipode AR</a> <span class="b">phone</span><br>
-    <span class="d">Point your phone at the ground: far-side coastlines overlaid on the live camera feed. The flagship app.</span></li>
-  <li><a class="n" href="window-imu/">Earth Window — IMU</a> <span class="b">phone · tablet</span><br>
-    <span class="d">Hold the device like a pane of glass and tilt it to aim through the planet — motion sensors only, no camera, in the spirit of iOS's Measure app.</span></li>
-  <li><a class="n" href="window/">Earth Window — head-tracked</a> <span class="b">laptop</span><br>
-    <span class="d">The screen becomes a literal window: the webcam tracks your head, and the view through the Earth shifts with parallax as you move.</span></li>
-  <li><a class="n" href="fly/">Fly Through</a> <span class="b">monitor</span><br>
-    <span class="d">A free-flying 3D Earth. WASD + mouse: dive into the planet, fly the sight-line to the antipode, and look back.</span></li>
-  <li><a class="n" href="circle/">The Circle at Your Feet</a> <span class="b">anything</span><br>
-    <span class="d">If the ground were a glass circle of radius r, how much of the far side could you see? Interactive cross-section + far-side map. (Radius = your height ⇒ half the planet.)</span></li>
-  <li><a class="n" href="aim/">Arm Aim</a> <span class="b">other</span><br>
-    <span class="d">Batch calculator + map: where to point your arm to aim at any city through the Earth.</span></li>
-</ul>
-
-<h2>Earlier experiments</h2>
-<ul class="menu">
-  <li><a class="n" href="extras/through-earth.html">Through the Earth — NYC</a> <span class="d">— the first sketch.</span></li>
-  <li><a class="n" href="extras/fly-v1.html">Fly Through v1</a> <span class="d">— earlier flight model.</span></li>
-  <li><a class="n" href="extras/globe.html">Continental Globe</a> <span class="d">— orbitable 3D Earth built from Natural Earth polygons.</span></li>
-  <li><a class="n" href="extras/globe-detailed.html">Continental Globe — detailed</a> <span class="d">— higher-resolution borders.</span></li>
-  <li><a class="n" href="extras/day-night.html">Day / Night</a> <span class="d">— the globe with a live terminator.</span></li>
-</ul>
-
-</div>
-
-<footer>
-  Hand-rolled projection math, no frameworks in the flagship app; coastlines from Natural Earth (public domain).
-  The view through the planet is deliberately mirrored relative to a wall map — you're reading the far
-  surface from the inside.
-</footer>
-
-<script>
-'use strict';
-document.getElementById('allLink').addEventListener('click', function (e) {
-  e.preventDefault();
-  var all = document.getElementById('all');
-  all.hidden = !all.hidden;
-  this.textContent = all.hidden ? 'all the apps →' : 'all the apps ↓';
-});
-</script>
 </body>
 </html>
