@@ -22,22 +22,13 @@
     margin:30px 0 10px; font-weight:600; }
 
   .devices { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
-  .dev { background:var(--panel); border:1.5px solid var(--line); border-radius:14px;
+  .dev { display:block; text-decoration:none; background:var(--panel); border:1.5px solid var(--line); border-radius:14px;
     padding:14px 10px; text-align:center; cursor:pointer; color:var(--fg); font-size:15px; }
   .dev .ico { font-size:30px; display:block; margin-bottom:6px; }
-  .dev:hover { border-color:var(--glow); }
+  .dev:hover { border-color:var(--glow); text-decoration:none; }
   .dev.sel { border-color:var(--glow); background:rgba(127,212,255,.1); }
   .dev small { color:var(--faint); display:block; font-size:11.5px; margin-top:3px; }
 
-  .pick { margin-top:18px; }
-  .card { display:block; background:var(--panel); border:1.5px solid var(--glow); border-radius:14px;
-    padding:16px 18px; color:var(--fg); }
-  .card:hover { background:rgba(127,212,255,.08); text-decoration:none; }
-  .card .name { font-size:19px; font-weight:650; color:var(--glow); }
-  .card .what { color:var(--dim); margin-top:4px; font-size:14.5px; }
-  .card .go { float:right; font-size:22px; color:var(--glow); margin-top:8px; }
-  .also { margin-top:10px; font-size:14px; color:var(--dim); }
-  .also a { margin-right:14px; }
 
   .menu { list-style:none; padding:0; margin:0; }
   .menu li { border-bottom:1px solid rgba(120,160,200,.14); padding:9px 2px; font-size:14.5px; }
@@ -58,14 +49,15 @@ Straight down is your exact antipode; the horizon is your own position, in every
 
 <h2>What are you using?</h2>
 <div class="devices" id="devices">
-  <button class="dev" data-d="phone"><span class="ico">📱</span>Phone / tablet<small>camera + motion sensors</small></button>
-  <button class="dev" data-d="laptop"><span class="ico">💻</span>Laptop<small>webcam head-tracking</small></button>
-  <button class="dev" data-d="monitor"><span class="ico">🖥️</span>Desktop + monitor<small>keyboard + mouse</small></button>
-  <button class="dev" data-d="none"><span class="ico">🤷</span>None of these<small>just curiosity</small></button>
+  <a class="dev" href="ar/"><span class="ico">📱</span>Phone / tablet<small>camera + motion sensors</small></a>
+  <a class="dev" href="window/"><span class="ico">💻</span>Laptop<small>webcam head-tracking</small></a>
+  <a class="dev" href="fly/"><span class="ico">🖥️</span>Desktop + monitor<small>keyboard + mouse</small></a>
+  <a class="dev" href="circle/"><span class="ico">🤷</span>None of these<small>just curiosity</small></a>
 </div>
 
-<div class="pick" id="pick"></div>
+<p style="margin-top:22px"><a href="#" id="allLink">all the apps →</a></p>
 
+<div id="all" hidden>
 <h2>Everything</h2>
 <ul class="menu">
   <li><a class="n" href="ar/">Antipode AR</a> <span class="b">phone</span><br>
@@ -91,6 +83,8 @@ Straight down is your exact antipode; the horizon is your own position, in every
   <li><a class="n" href="extras/day-night.html">Day / Night</a> <span class="d">— the globe with a live terminator.</span></li>
 </ul>
 
+</div>
+
 <footer>
   Hand-rolled projection math, no frameworks in the flagship app; coastlines from Natural Earth (public domain).
   The view through the planet is deliberately mirrored relative to a wall map — you're reading the far
@@ -99,48 +93,12 @@ Straight down is your exact antipode; the horizon is your own position, in every
 
 <script>
 'use strict';
-var RECS = {
-  phone: {
-    href: 'ar/', name: 'Antipode AR',
-    what: 'Grant camera + motion permission, point the phone at the ground, and see the far side of the Earth drawn on the live camera image, locked to the world as you move.',
-    also: [['window-imu/', 'Earth Window (no camera, IMU only)'], ['circle/', 'The Circle at Your Feet']]
-  },
-  laptop: {
-    href: 'window/', name: 'Earth Window — head-tracked',
-    what: 'Your webcam tracks your head and the screen becomes a window through the planet, with true parallax as you lean and move.',
-    also: [['circle/', 'The Circle at Your Feet'], ['fly/', 'Fly Through']]
-  },
-  monitor: {
-    href: 'fly/', name: 'Fly Through',
-    what: 'Free-fly a 3D Earth with WASD + mouse: follow a sight-line through the planet and out the other side.',
-    also: [['circle/', 'The Circle at Your Feet'], ['extras/day-night.html', 'Day / Night globe']]
-  },
-  none: {
-    href: 'circle/', name: 'The Circle at Your Feet',
-    what: 'No sensors needed. If the ground were a glass circle of radius r, how much of the far side could you see? A circle as wide as you are tall shows half the planet.',
-    also: [['aim/', 'Arm Aim calculator']]
-  }
-};
-var pick = document.getElementById('pick');
-function choose(d, scroll) {
-  var r = RECS[d];
-  document.querySelectorAll('.dev').forEach(function (b) {
-    b.classList.toggle('sel', b.dataset.d === d);
-  });
-  pick.innerHTML =
-    '<a class="card" href="' + r.href + '"><span class="go">→</span>' +
-    '<div class="name">' + r.name + '</div><div class="what">' + r.what + '</div></a>' +
-    '<div class="also">also works here: ' +
-    r.also.map(function (a) { return '<a href="' + a[0] + '">' + a[1] + '</a>'; }).join(' ') + '</div>';
-  if (scroll) pick.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-document.querySelectorAll('.dev').forEach(function (b) {
-  b.addEventListener('click', function () { choose(b.dataset.d, true); });
+document.getElementById('allLink').addEventListener('click', function (e) {
+  e.preventDefault();
+  var all = document.getElementById('all');
+  all.hidden = !all.hidden;
+  this.textContent = all.hidden ? 'all the apps →' : 'all the apps ↓';
 });
-/* preselect a likely device; the buttons remain one tap away */
-var touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
-var small = Math.min(screen.width, screen.height) < 900;
-choose(touch && small ? 'phone' : touch ? 'phone' : 'laptop', false);
 </script>
 </body>
 </html>
