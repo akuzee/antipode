@@ -7,9 +7,11 @@ A family of single-file web apps draws the far side of the planet — live, corr
 oriented, locked to the world. Straight down is your exact antipode; the horizon is your
 own position, in every direction at once.
 
-(To be precise about "everything": down means anywhere below the horizontal. The only part
-of the planet you *can't* see by looking down into the earth is the thin disc of surface
-around you — the part you can see the ordinary way.)
+(If "everything is down" sounds too strong: of course, a lot of your own continent is more
+"next to you" than "under you". But curvature kicks in faster than you'd think — stand in
+New York and look directly at Los Angeles, the actual straight line to the city, and you're
+looking at a spot on the pavement about 17 feet away. The line dips half the arc you span:
+NYC–LA is 35.4° around the globe, so the sight line drops 17.7° below your horizontal.)
 
 **`index.html`** is the hub: pick your device (phone / laptop / monitor / none) and it
 routes you to the right app. The apps:
