@@ -19,7 +19,7 @@ routes you to the right app. The apps:
 
 | path | app | device |
 |---|---|---|
-| `ar/` | **Antipode AR**: far-side coastlines over the live camera feed; no build step, no frameworks, no network use after load | phone |
+| `ar/` | **The AR app**: far-side coastlines over the live camera feed; no build step, no frameworks, no network use after load | phone |
 | `window-imu/` | **Earth Window (IMU)**: tilt the device like a pane of glass; sensors only, no camera | phone / tablet |
 | `window/` | **Earth Window (head-tracked)**: webcam head tracking turns the screen into a literal window with parallax | laptop |
 | `fly/` | **Fly Through**: free-flying 3D Earth, WASD + mouse | monitor |
