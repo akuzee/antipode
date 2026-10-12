@@ -26,6 +26,10 @@
     padding:14px 10px; text-align:center; cursor:pointer; color:var(--fg); font-size:15px; }
   .dev .ico { font-size:30px; display:block; margin-bottom:6px; }
   .dev:hover { border-color:var(--glow); text-decoration:none; }
+  .dev.rec { border-color:var(--glow); position:relative; }
+  .dev .badge { position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+    background:#0a1420; border:1px solid var(--glow); color:var(--glow); border-radius:999px;
+    padding:1px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.7px; white-space:nowrap; }
   .dev.sel { border-color:var(--glow); background:rgba(127,212,255,.1); }
   .dev small { color:var(--faint); display:block; font-size:11.5px; margin-top:3px; }
 
@@ -45,7 +49,7 @@ point to directly, through thousands of miles of earth.</p>
 
 <h2>What are you using?</h2>
 <div class="devices" id="devices">
-  <a class="dev" href="ar/"><span class="ico">📱</span>Phone / tablet<small>camera + motion sensors</small></a>
+  <a class="dev rec" href="ar/"><span class="badge">recommended</span><span class="ico">📱</span>Phone / tablet<small>camera + motion sensors</small></a>
   <a class="dev" href="window/"><span class="ico">💻</span>Laptop<small>webcam head-tracking</small></a>
   <a class="dev" href="fly/"><span class="ico">🖥️</span>Desktop + monitor<small>keyboard + mouse · least immersive</small></a>
   <a class="dev" href="circle/"><span class="ico">🤷</span>None of these<small>just curiosity</small></a>
