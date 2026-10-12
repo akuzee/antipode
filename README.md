@@ -43,14 +43,33 @@ e.g. GitHub Pages, no certificate warning appears.)
 On a desktop browser (no motion sensors) the AR app falls back to drag-to-look /
 scroll-to-zoom, which is handy for trying other locations via the manual lat/lon input.
 
+## Two ways to look (phone app)
+
+What is on screen must correspond to reality, so the phone app has no free "field of view":
+
+- **Window** (default): the screen is a pane of glass. The view through it is fixed by the pane's
+  physical size and its distance from your eye, nothing else (an off-axis pinhole: a ray from the
+  eye through pane point (X, Y) is pixel (W/2 + kX, H/2 - kY), so F = k·ez). Screen size comes from
+  a phone-model table, a credit-card calibration (hold a card upright on the screen and match the
+  outline), or a typed diagonal. Eye distance is either assumed (hold it at ~40 cm) or measured by
+  the front camera from the iris diameter (11.7 mm). The rear camera can show the floor behind the
+  coastlines, digitally zoomed to the window's angle (approximate, since the lens is estimated);
+  with a black background, head tracking stays live and gives parallax. Phones allow one camera at
+  a time, so with the rear camera on, the face is measured once at start and then the cameras
+  swap.
+- **Camera AR**: the far side overlaid on the rear camera's own image. Much wider, but a web page
+  cannot read a lens's field of view, so it is estimated per device (~68° across the image's long
+  side on iPhone) and can be corrected under ⚙ if you know your lens. The overlay accounts for the
+  `object-fit: cover` crop.
+
 ## Controls (⚙)
 
-- **Field of view**: the calibration knob; if the overlay's angular scale feels wrong, this is it. Default 60° vertical.
+- **View**: which of the two modes is active and its parameters; "change" reopens setup.
 - **Camera opacity**: 0 gives a black background, often more legible.
 - **Heading trim**: rotates the whole map about the vertical, for compass error.
 - **Flip signs α/β/γ**: escape hatches for device-specific orientation sign bugs.
 - **Location**: manual lat/lon (also for exploring other places), or re-query GPS.
-- **Camera**: lens picker; the ultra-wide (0.5×) lens roughly doubles the visible Θ.
+- **Camera**: lens picker; the ultra-wide (0.5×) lens roughly doubles the visible Θ (Camera AR; set Lens FOV ≈ 106°).
 - **Freeze** (❄): holds the last orientation so you can study the frame.
 - **Run self-test**: the acceptance checks, runnable on the device itself.
 

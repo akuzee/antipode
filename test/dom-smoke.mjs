@@ -84,6 +84,7 @@ try {
 }
 
 try {
+  byId('modeAr').fire('click');          // Camera AR mode: the wide, lens-registered view
   byId('startBtn').fire('click');        // start: attaches sensors, geo fires synchronously
   check('start flow runs (geo fix applied)', /loc 40\.71/.test(byId('chipLoc').textContent),
     JSON.stringify(byId('chipLoc').textContent));
@@ -112,6 +113,21 @@ try {
   for (let i = 6; i <= 40 && rafCb; i++) { const cb = rafCb; rafCb = null; cb(t0 + i * 200); }
   const nu = parseFloat((byId('roMain').textContent.match(/ν ([\d.]+)°/) || [])[1]);
   check('tilt 40° -> readout ν ≈ 40°', Math.abs(nu - 40) < 1.5, 'ν = ' + nu + '°');
+
+  // window mode: the pane geometry. In the stub (390x844 CSS px, dpr 2, no
+  // device-table hit) the screen is taken as 326 ppi -> 6.42 px/mm, so at the
+  // assumed 40 cm the pane subtends 2*atan(422 / (6417*0.40)) = 18.6 deg.
+  drawn.texts.length = 0;
+  byId('modeWin').fire('click');
+  byId('startBtn').fire('click');
+  (winListeners['deviceorientation'] || []).forEach(fn =>
+    fn({ alpha: 0, beta: 0, gamma: 0, absolute: false }));
+  for (let i = 41; i <= 60 && rafCb; i++) { const cb = rafCb; rafCb = null; cb(t0 + i * 200); }
+  check('window mode: pane subtends ~18.6°', /window 18\.[4-8]°/.test(byId('chipView').textContent),
+    JSON.stringify(byId('chipView').textContent));
+  check('window mode: only the narrow rings fit', drawn.texts.includes('Θ 10°') && !drawn.texts.includes('Θ 60°'),
+    JSON.stringify(drawn.texts.filter(t => t.startsWith('Θ'))));
+  check('window mode: Perth still in view, Sydney not', drawn.texts.includes('Perth') && !drawn.texts.includes('Sydney'));
 
   // self-test button produces all-pass output
   byId('runTest').fire('click');

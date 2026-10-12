@@ -55,13 +55,36 @@
   .note-sm { font-size:11px; color:#8aa2b5; margin:6px 0; }
   .hidden { display:none !important; }
 
-  #startOverlay { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; text-align:center; padding:26px;
+  #startOverlay { position:fixed; inset:0; z-index:50; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:calc(18px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom));
     background:radial-gradient(ellipse at 50% 120%, #0a2038 0%, #04080e 70%); }
-  #startOverlay h1 { font-size:34px; letter-spacing:.28em; font-weight:300; margin-bottom:14px; }
-  #startOverlay p { max-width:420px; color:#a8bfd0; font-size:14px; margin:6px 0; }
-  #startBtn { margin-top:22px; font-size:18px; padding:14px 52px; border-radius:999px;
+  .setup { max-width: 460px; margin: 0 auto; }
+  .setup h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:#7fa8c8; margin:14px 0 8px; }
+  .modeCard { display:block; border:1px solid #24384c; border-radius:12px; padding:11px 13px; margin:8px 0;
+    background:rgba(8,12,18,.5); cursor:pointer; }
+  .modeCard.sel { border-color:#4a90d0; background:rgba(18,57,94,.45); }
+  .modeCard .mt { font-size:15px; font-weight:600; }
+  .modeCard .mt small { color:#7fe0a0; font-weight:500; margin-left:8px; font-size:11px; }
+  .modeCard .md { font-size:12.5px; color:#a8bfd0; margin-top:3px; }
+  .opt { display:flex; align-items:center; gap:8px; margin:8px 0; flex-wrap:wrap; }
+  .opt label { flex:0 0 96px; font-size:12px; color:#b8ccd9; }
+  .opt select, .opt input[type=number], .opt button { background:#16283a; color:#dfe9f0; border:1px solid #2a4258;
+    border-radius:6px; padding:6px 9px; font-size:12.5px; }
+  .opt select { flex:1 1 120px; max-width:230px; min-width:0; }
+  .opt input[type=number] { width:74px; }
+  .status { font-size:11.5px; color:#8aa2b5; margin:-2px 0 6px 104px; }
+  .status.ok { color:#7fe0a0; }
+  #startBtn { display:block; margin:18px auto 0; font-size:18px; padding:14px 52px; border-radius:999px;
     border:1px solid #4a90d0; background:#12395e; color:#e6f2ff; cursor:pointer; }
+  #cardCal { position:fixed; inset:0; z-index:55; background:#04080e; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:20px; text-align:center; }
+  #cardRect { border:2px solid #7fd4ff; border-radius:8px; box-shadow:0 0 0 2000px rgba(0,0,0,.25);
+    display:flex; align-items:center; justify-content:center; color:#7fd4ff; font-size:12px; }
+  #cardCal p { max-width:360px; color:#a8bfd0; font-size:13px; margin:10px 0; }
+  #cardCal input[type=range] { width:80%; max-width:360px; }
+  #cardCal button { margin:8px 6px; background:#16283a; color:#dfe9f0; border:1px solid #2a4258;
+    border-radius:6px; padding:8px 18px; font-size:13px; }
+  #faceVid { position:fixed; width:1px; height:1px; opacity:0; pointer-events:none; }
   #testPanel { position:fixed; inset:0; z-index:60; background:rgba(3,6,10,.95);
     padding:calc(16px + env(safe-area-inset-top)) 16px 16px; overflow:auto; }
   #testPanel pre { font:12px/1.7 ui-monospace, Menlo, Consolas, monospace; white-space:pre-wrap; }
@@ -73,9 +96,11 @@
 <body class="noinfo">
 
 <video id="cam" autoplay playsinline muted></video>
+<video id="faceVid" autoplay playsinline muted></video>
 <canvas id="cv"></canvas>
 
 <div id="chips">
+  <div class="chip" id="chipView">view: –</div>
   <div class="chip" id="chipLoc">location: –</div>
   <div class="chip" id="chipHead">heading: –</div>
   <div class="chip hidden" id="chipFroze">FROZEN</div>
@@ -90,9 +115,14 @@
 </div>
 
 <div id="panel" class="hidden">
-  <h3>AR controls</h3>
-  <div class="row"><label>Field of view</label>
-    <input type="range" id="fov" min="40" max="130" step="1" value="60"><span class="val" id="fovVal">60&#176;</span></div>
+  <h3>Controls</h3>
+  <div class="row"><label>View</label>
+    <span id="viewVal" style="flex:1;font-size:11px;color:#b8ccd9;font-family:ui-monospace,Menlo,monospace"></span>
+    <button id="setupBtn">change</button></div>
+  <div class="row" id="lensRow"><label>Lens FOV</label>
+    <input type="number" id="lensFov" min="30" max="140" step="1" inputmode="decimal">
+    <span class="note-sm" style="flex:1">degrees across the long side of the camera image. A web page
+      cannot read this from the lens, so it is estimated for your phone; Camera AR mode only.</span></div>
   <div class="row"><label>Camera opacity</label>
     <input type="range" id="opacity" min="0" max="100" step="1" value="55"><span class="val" id="opVal">55%</span></div>
   <div class="row"><label>Heading trim</label>
@@ -108,19 +138,68 @@
     <button id="locApply">set</button><button id="locGps">GPS</button></div>
   <div class="row"><label>Camera</label><select id="camSel"><option>default</option></select></div>
   <div class="note-sm" id="apInfo">antipode: –</div>
-  <div class="note-sm">Tip: switching to the ultra-wide (0.5&#215;) lens roughly doubles the visible &#920;,
-    from ~84&#176; to ~119&#176; at the frame corners (45% &#8594; 74% of the Earth's surface). Pick it under
-    Camera, then raise the FOV slider to match (~100&#8211;120&#176;).</div>
-  <div class="note-sm">The FOV slider is the scale calibration: if the overlay feels too zoomed-in,
-    increase it. Trim rotates the whole map about the vertical if the compass is off.</div>
+  <div class="note-sm">Tip (Camera AR): the ultra-wide (0.5&#215;) lens roughly doubles the visible &#920;.
+    Pick it under Camera and set Lens FOV to about 106&#176;.</div>
+  <div class="note-sm">Trim rotates the whole map about the vertical if the compass is off.</div>
   <div class="row"><button id="runTest">Run self-test</button><button id="panelClose">close</button></div>
 </div>
 
 <div id="startOverlay">
+ <div class="setup">
+  <h2>How do you want to look through the Earth?</h2>
+  <div class="modeCard sel" id="modeWin">
+    <div class="mt">Window <small>recommended</small></div>
+    <div class="md">The screen is a pane of glass. What you see through it is fixed by the pane's size
+      and how far it is from your eye; nothing to tune. Tilt the phone to look around.</div>
+  </div>
+  <div class="modeCard" id="modeAr">
+    <div class="mt">Camera AR</div>
+    <div class="md">The far side drawn over the rear camera's view. Much wider, but a web page cannot read
+      the lens's field of view, so it is estimated for your phone (adjustable under &#9881;).</div>
+  </div>
+
+  <div id="winOpts">
+    <h2>The window</h2>
+    <div class="opt"><label>Screen size</label>
+      <select id="scrSrc">
+        <option value="auto">auto (phone model)</option>
+        <option value="card">measure with a credit card</option>
+        <option value="diag">enter diagonal (inches)</option>
+      </select>
+      <input type="number" id="diagIn" step="0.01" min="3" max="14" placeholder="6.1" class="hidden">
+      <button id="cardBtn" class="hidden">measure</button></div>
+    <div class="status" id="scrStatus"></div>
+    <div class="opt"><label>Eye distance</label>
+      <select id="eyeSrc">
+        <option value="assume">assume: hold it at</option>
+        <option value="face">measure with the front camera</option>
+      </select>
+      <input type="number" id="eyeCm" step="1" min="10" max="150" value="40"><span style="font-size:12px;color:#b8ccd9">cm</span></div>
+    <div class="status" id="eyeStatus"></div>
+    <div class="opt"><label>Background</label>
+      <select id="bgSrc">
+        <option value="camera">rear camera, zoomed to the window (approximate)</option>
+        <option value="black">black</option>
+      </select></div>
+    <div class="status" id="bgStatus"></div>
+  </div>
+  <div id="arOpts" class="hidden">
+    <div class="status" id="lensStatus" style="margin-left:0"></div>
+  </div>
+
   <button id="startBtn">Start</button>
-  <p style="font-size:11px;color:#5f7a92;margin-top:18px">Needs motion &amp; orientation, location and
-     camera permission. Everything runs on the phone; nothing is sent anywhere.<br>
+  <p style="font-size:11px;color:#5f7a92;margin-top:14px;text-align:center">Needs motion &amp; orientation,
+     location and camera permission. Everything runs on the phone; nothing is sent anywhere.<br>
      No sensors (desktop)? Drag to look around. Scroll to zoom.</p>
+ </div>
+</div>
+
+<div id="cardCal" class="hidden">
+  <p>Hold a credit card (or any ID card) <b>upright</b> flat against the screen and drag the slider until
+     the outline matches it exactly. That measures the real size of this screen.</p>
+  <div id="cardRect"><span id="cardLbl"></span></div>
+  <input type="range" id="cardW" min="120" max="400" step="1" value="260">
+  <div><button id="cardDone">done</button><button id="cardCancel">cancel</button></div>
 </div>
 
 <div id="testPanel" class="hidden"><pre id="testOut"></pre><button id="testClose">close</button></div>
@@ -463,7 +542,14 @@ var W = 0, H = 0;
 
 var S = {
   lat: null, lon: null, aLat: null, aLon: null,
-  fov: 60, trim: 0, fA: false, fB: false, fG: false,
+  fov: 60,                      // desktop drag-mode only (no sensors, no lens)
+  trim: 0, fA: false, fB: false, fG: false,
+  view: 'window',               // 'window' (pane geometry) | 'ar' (overlay on the lens image)
+  scr: { pxPerMm: null, src: '', name: '' },     // physical screen scale, CSS px per mm
+  eye: { ex: 0, ey: 0, ez: 0.40, src: 'assumed' },  // metres, pane frame (x right, y up, z to viewer)
+  bg: 'camera',
+  lens: { vfov: 68, src: 'estimated' },           // degrees across the camera image's long side
+  face: { lm: null, stream: null, run: false, samples: [] },
   frozen: false,
   qS: null, qT: null,           // smoothed / target orientation (device -> ENU)
   headDelta: null,              // iOS compass yaw correction, degrees
@@ -488,7 +574,7 @@ function ringDirs(nuDeg) {
   }
   return a;
 }
-var RINGS = [30, 60, 90, 120, 150].map(function (th) { return { th: th, dirs: ringDirs(th / 2) }; });
+var RINGS = [10, 20, 30, 60, 90, 120, 150].map(function (th) { return { th: th, dirs: ringDirs(th / 2) }; });
 var HORIZON = ringDirs(90);
 
 /* ------------------------------------------------------------- location --- */
@@ -562,6 +648,7 @@ function startCamera(deviceId) {
     S.stream = st;
     video.srcObject = st;
     video.play().catch(function () {});
+    video.onloadedmetadata = syncVideoZoom;
     return navigator.mediaDevices.enumerateDevices();
   }).then(function (devs) {
     if (!devs) return;
@@ -582,6 +669,96 @@ function startCamera(deviceId) {
   });
 }
 
+/* ------------------------------------------------------- view geometry --- */
+/* Physical pixel density of known phones, keyed by CSS viewport size and
+   devicePixelRatio (portrait). CSS px per mm = ppi / 25.4 / dpr. */
+var SCREENS = {
+  '440x956@3': [460, 'iPhone 16 Pro Max / 17 Pro Max'],
+  '402x874@3': [460, 'iPhone 16 Pro / 17 / 17 Pro'],
+  '420x912@3': [460, 'iPhone Air'],
+  '430x932@3': [460, 'iPhone 14 Pro Max / 15 Plus / 15 Pro Max / 16 Plus'],
+  '393x852@3': [460, 'iPhone 14 Pro / 15 / 15 Pro / 16'],
+  '390x844@3': [460, 'iPhone 12 / 13 / 14 / 16e'],
+  '428x926@3': [458, 'iPhone 12 Pro Max / 13 Pro Max / 14 Plus'],
+  '375x812@3': [460, 'iPhone X / XS / 11 Pro / 12 mini / 13 mini'],
+  '414x896@3': [458, 'iPhone XS Max / 11 Pro Max'],
+  '414x896@2': [326, 'iPhone XR / 11'],
+  '375x667@2': [326, 'iPhone 6 / 7 / 8 / SE'],
+  '414x736@3': [401, 'iPhone 6 / 7 / 8 Plus'],
+  '744x1133@2': [326, 'iPad mini'],
+  '820x1180@2': [264, 'iPad (10th gen)'],
+  '834x1194@2': [264, 'iPad Air / Pro 11'],
+  '834x1210@2': [264, 'iPad Air / Pro 11'],
+  '768x1024@2': [264, 'iPad'],
+  '1024x1366@2': [264, 'iPad Pro 12.9'],
+  '1032x1376@2': [264, 'iPad Pro 13']
+};
+function store(k, v) { try { localStorage.setItem('eid.' + k, JSON.stringify(v)); } catch (e) {} }
+function load(k) { try { var v = localStorage.getItem('eid.' + k); return v == null ? null : JSON.parse(v); } catch (e) { return null; } }
+
+function detectScreen() {
+  var dpr = window.devicePixelRatio || 1;
+  var sw = 0, sh = 0;
+  if (typeof screen !== 'undefined' && screen.width) {
+    sw = Math.min(screen.width, screen.height); sh = Math.max(screen.width, screen.height);
+  } else { sw = Math.min(W, H); sh = Math.max(W, H); }
+  var key = sw + 'x' + sh + '@' + Math.round(dpr);
+  var hit = SCREENS[key];
+  if (hit) return { pxPerMm: hit[0] / 25.4 / dpr, src: 'table', name: hit[1], sw: sw, sh: sh };
+  var ppi = dpr >= 3 ? 460 : dpr >= 2 ? 326 : 160;
+  return { pxPerMm: ppi / 25.4 / dpr, src: 'guess', name: 'unknown device (' + key + '), assuming ' + ppi + ' ppi', sw: sw, sh: sh };
+}
+function screenMm() {
+  var d = detectScreen();
+  var pp = S.scr.pxPerMm || d.pxPerMm;
+  return { w: d.sw / pp, h: d.sh / pp };
+}
+
+/* Focal length of the displayed camera image in CSS px: the lens FOV spans the
+   image's long side, and object-fit:cover scales the video by s = max(W/vw, H/vh). */
+function lensF() {
+  var vw = video.videoWidth || 0, vh = video.videoHeight || 0;
+  var f = Math.tan(S.lens.vfov * D2R / 2);
+  if (!vw || !vh) return (H / 2) / f;
+  var sc = Math.max(W / vw, H / vh);
+  return sc * (Math.max(vw, vh) / 2) / f;
+}
+
+/* Per-frame projection: focal length F (px) and principal point (cx, cy).
+   window: a ray from the eye through pane point (X, Y) is pixel
+           (W/2 + k X, H/2 - k Y), k = px per metre; with the eye at (ex,ey,ez)
+           this is a pinhole of F = k ez about the point under the eye.
+   ar:     the lens's own pinhole, so the overlay registers on the video. */
+function viewParams() {
+  if (S.man.on) return { F: (H / 2) / Math.tan(S.fov * D2R / 2), cx: W / 2, cy: H / 2 };
+  if (S.view === 'ar') return { F: lensF(), cx: W / 2, cy: H / 2 };
+  var k = (S.scr.pxPerMm || detectScreen().pxPerMm) * 1000;
+  return { F: k * S.eye.ez, cx: W / 2 + k * S.eye.ex, cy: H / 2 - k * S.eye.ey };
+}
+function windowVfov() {           // what the pane subtends at the eye, degrees
+  var k = (S.scr.pxPerMm || detectScreen().pxPerMm) * 1000;
+  return 2 * Math.atan((H / 2) / (k * S.eye.ez)) * R2D;
+}
+function syncVideoZoom() {
+  if (S.view !== 'window' || S.bg !== 'camera') { video.style.transform = ''; return; }
+  var z = viewParams().F / lensF();       // make the lens image cover exactly the window's angle
+  video.style.transform = 'scale(' + Math.max(1, z).toFixed(3) + ')';
+}
+function describeView() {
+  if (S.view === 'ar') return 'camera AR · lens ' + Math.round(S.lens.vfov) + '° (' + S.lens.src + ')';
+  var sm = screenMm();
+  return 'window ' + windowVfov().toFixed(1) + '° · eye ' + Math.round(S.eye.ez * 100) + ' cm (' +
+    S.eye.src + ') · screen ' + sm.w.toFixed(0) + '×' + sm.h.toFixed(0) + ' mm';
+}
+function syncViewUi() {
+  var d = describeView();
+  $('chipView').textContent = 'view: ' + d;
+  $('viewVal').textContent = d;
+  $('lensRow').classList.toggle('hidden', S.view !== 'ar');
+  $('lensFov').value = Math.round(S.lens.vfov);
+  syncVideoZoom();
+}
+
 /* ------------------------------------------------------------ rendering --- */
 function resize() {
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -589,6 +766,7 @@ function resize() {
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   cv.style.width = W + 'px'; cv.style.height = H + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  syncVideoZoom();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -642,14 +820,14 @@ function render(t) {
   }
   var q = S.trim ? A.qMul(A.qAxisZ(S.trim * D2R), S.qS) : S.qS;
   var m = A.qToMat(q);
-  var F = (H / 2) / Math.tan(S.fov * D2R / 2);
-  var cx = W / 2, cy = H / 2;
+  var vp = viewParams();
+  var F = vp.F, cx = vp.cx, cy = vp.cy;
 
-  // Theta rings
-  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+  // Theta rings (the 10° and 20° rings matter in the narrow window view)
   ctx.lineWidth = 1;
   var anchors = [];
   for (var r = 0; r < RINGS.length; r++) {
+    ctx.strokeStyle = RINGS[r].th < 30 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.20)';
     ctx.beginPath();
     anchors[r] = projectLine(RINGS[r].dirs, m, F, cx, cy, true);
     ctx.stroke();
@@ -722,7 +900,15 @@ function render(t) {
 }
 
 function updateHud(m) {
-  var nu = Math.acos(clamp(m[8], -1, 1)) * R2D;
+  /* direction (device frame) from the eye through the screen centre; in AR /
+     desktop modes that is the optical axis (0,0,-1) */
+  var vx = 0, vy = 0, vz = -1;
+  if (S.view === 'window' && !S.man.on) {
+    var L = Math.hypot(S.eye.ex, S.eye.ey, S.eye.ez) || 1;
+    vx = -S.eye.ex / L; vy = -S.eye.ey / L; vz = -S.eye.ez / L;
+  }
+  var ex_ = m[0]*vx + m[1]*vy + m[2]*vz, ny_ = m[3]*vx + m[4]*vy + m[5]*vz, uz_ = m[6]*vx + m[7]*vy + m[8]*vz;
+  var nu = Math.acos(clamp(-uz_, -1, 1)) * R2D;
   var ro = $('roMain'), rs = $('roSub');
   if (nu > 90.5) {
     ro.textContent = 'ν ' + nu.toFixed(1) + '°, above the horizon';
@@ -731,7 +917,7 @@ function updateHud(m) {
     var th = 2 * nu;
     ro.textContent = 'ν ' + nu.toFixed(1) + '° · Θ ' + th.toFixed(1) + '° from antipode';
     if (S.lat != null) {
-      var brg = (Math.atan2(-m[2], -m[5]) * R2D % 360 + 360) % 360;
+      var brg = (Math.atan2(ex_, ny_) * R2D % 360 + 360) % 360;
       var far = A.destPoint(S.lat, S.lon, brg, 180 - th);
       var best = null, bd = 1e9;
       for (var i = 0; i < A.CITIES.length; i++) {
@@ -754,7 +940,7 @@ function updateHud(m) {
   else if (S.mode === 'relative')
     hc.textContent = 'heading: RELATIVE, align with trim slider';
   else if (S.mode === 'manual')
-    hc.textContent = 'manual: drag to look, scroll = FOV';
+    hc.textContent = 'manual: drag to look, scroll = zoom';
   else hc.textContent = 'heading: –';
 }
 
@@ -787,8 +973,14 @@ function note(msg) {
   noteTimer = setTimeout(function () { n.style.display = 'none'; }, 6000);
 }
 
-$('fov').addEventListener('input', function () {
-  S.fov = +this.value; $('fovVal').textContent = this.value + '°';
+$('lensFov').addEventListener('change', function () {
+  var v = parseFloat(this.value);
+  if (v >= 30 && v <= 140) { S.lens.vfov = v; S.lens.src = 'manual'; store('lens', S.lens); syncViewUi(); }
+});
+$('setupBtn').addEventListener('click', function () {
+  $('panel').classList.add('hidden');
+  stopFace();
+  $('startOverlay').classList.remove('hidden');
 });
 $('opacity').addEventListener('input', function () {
   video.style.opacity = this.value / 100; $('opVal').textContent = this.value + '%';
@@ -868,12 +1060,175 @@ cv.addEventListener('pointermove', function (e) {
 cv.addEventListener('pointerup', function () { drag = null; });
 cv.addEventListener('pointercancel', function () { drag = null; });
 window.addEventListener('wheel', function (e) {
-  S.fov = clamp(S.fov + e.deltaY * 0.02, 40, 130);
-  $('fov').value = Math.round(S.fov);
-  $('fovVal').textContent = Math.round(S.fov) + '°';
+  if (S.man.on) S.fov = clamp(S.fov + e.deltaY * 0.02, 40, 130);
 }, { passive: true });
 
+/* ------------------------------------------------- setup: screen size --- */
+function setScreen(sc) { S.scr = sc; store('scr', sc); syncScreenStatus(); }
+function syncScreenStatus() {
+  var d = detectScreen(), el = $('scrStatus'), sm = screenMm();
+  var who = S.scr.src === 'card' ? 'measured with a card' :
+            S.scr.src === 'diag' ? 'from the diagonal you entered' :
+            (d.src === 'table' ? d.name + ' (device table)' : d.name);
+  el.textContent = sm.w.toFixed(1) + ' × ' + sm.h.toFixed(1) + ' mm, ' + who;
+  el.className = 'status' + ((S.scr.src === 'card' || d.src === 'table') ? ' ok' : '');
+}
+$('scrSrc').addEventListener('change', function () {
+  var v = this.value;
+  $('diagIn').classList.toggle('hidden', v !== 'diag');
+  $('cardBtn').classList.toggle('hidden', v !== 'card');
+  if (v === 'auto') setScreen({ pxPerMm: null, src: 'auto', name: '' });
+  if (v === 'card') openCardCal();
+});
+$('diagIn').addEventListener('change', function () {
+  var inch = parseFloat(this.value), d = detectScreen();
+  if (inch > 2 && inch < 20)
+    setScreen({ pxPerMm: Math.hypot(d.sw, d.sh) / (inch * 25.4), src: 'diag', name: inch + '"' });
+});
+$('cardBtn').addEventListener('click', openCardCal);
+var CARD_W = 85.60, CARD_H = 53.98;     // ISO/IEC 7810 ID-1, mm
+/* The card is shown upright: its short side (53.98 mm) spans the screen width,
+   since the long side is wider than most phone screens. */
+function openCardCal() {
+  $('cardCal').classList.remove('hidden');
+  var sl = $('cardW'); sl.max = Math.max(200, W - 16);
+  sl.value = Math.round(CARD_H * (S.scr.pxPerMm || detectScreen().pxPerMm));
+  cardLayout();
+}
+function cardLayout() {
+  var w = +$('cardW').value, r = $('cardRect');
+  r.style.width = w + 'px'; r.style.height = Math.round(w * CARD_W / CARD_H) + 'px';
+  $('cardLbl').textContent = (w / CARD_H).toFixed(2) + ' px/mm';
+}
+$('cardW').addEventListener('input', cardLayout);
+$('cardDone').addEventListener('click', function () {
+  setScreen({ pxPerMm: +$('cardW').value / CARD_H, src: 'card', name: 'card' });
+  $('cardCal').classList.add('hidden');
+});
+$('cardCancel').addEventListener('click', function () { $('cardCal').classList.add('hidden'); });
+
+/* --------------------------------------------- setup: mode + eye + bg --- */
+function setView(v) {
+  S.view = v; store('view', v);
+  $('modeWin').classList.toggle('sel', v === 'window');
+  $('modeAr').classList.toggle('sel', v === 'ar');
+  $('winOpts').classList.toggle('hidden', v !== 'window');
+  $('arOpts').classList.toggle('hidden', v !== 'ar');
+  $('lensStatus').textContent = 'Lens field of view: ' + Math.round(S.lens.vfov) + '° across the long side of the ' +
+    'image (' + S.lens.src + '). Change it under ⚙ if you know your lens.';
+}
+$('modeWin').addEventListener('click', function () { setView('window'); });
+$('modeAr').addEventListener('click', function () { setView('ar'); });
+$('eyeSrc').addEventListener('change', syncEyeUi);
+$('bgSrc').addEventListener('change', syncEyeUi);
+$('eyeCm').addEventListener('change', function () {
+  var v = parseFloat(this.value);
+  if (v >= 10 && v <= 150) { S.eye.ez = v / 100; S.eye.src = 'assumed'; store('eyeCm', v); }
+  syncEyeUi();
+});
+function syncEyeUi() {
+  var face = $('eyeSrc').value === 'face', cam = $('bgSrc').value === 'camera';
+  $('eyeCm').classList.toggle('hidden', face);
+  S.bg = cam ? 'camera' : 'black'; store('bg', S.bg);
+  $('eyeStatus').textContent = face
+    ? (cam ? 'The front camera measures your eye distance for ~2 s at start, then hands over to the rear ' +
+             'camera (phones allow one camera at a time), so hold the same distance.'
+           : 'Head tracking stays live: moving your head shifts the view through the pane (parallax).')
+    : 'Hold the phone about ' + $('eyeCm').value + ' cm (' + Math.round($('eyeCm').value / 2.54) + ' in) from your eyes. ' +
+      'Only this distance and the screen size set the view; where you stand does not matter.';
+  $('bgStatus').textContent = cam
+    ? 'The rear camera is zoomed so it covers the same angle as the window. Its lens is estimated, so the ' +
+      'floor behind the coastlines is approximate; the coastlines themselves are exact.'
+    : '';
+}
+
+/* ------------------------------------------- face tracking (front camera) --- */
+var FRONT_FOV = 74, IRIS_MM = 11.7;     // long-side FOV of a typical phone selfie camera; human iris diameter
+function loadFaceLandmarker() {
+  if (S.face.lm) return Promise.resolve(S.face.lm);
+  var base = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21';
+  return import(base + '/vision_bundle.mjs').then(function (v) {
+    return v.FilesetResolver.forVisionTasks(base + '/wasm').then(function (fs) {
+      return v.FaceLandmarker.createFromOptions(fs, {
+        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/' +
+          'face_landmarker/float16/1/face_landmarker.task', delegate: 'GPU' },
+        runningMode: 'VIDEO', numFaces: 1 });
+    });
+  }).then(function (lm) { S.face.lm = lm; return lm; });
+}
+function stopFace() {
+  S.face.run = false;
+  if (S.face.stream) { S.face.stream.getTracks().forEach(function (t) { t.stop(); }); S.face.stream = null; }
+}
+/* Eye position from one landmark frame: distance from the iris's known size,
+   lateral offset from where the eyes sit in the image. The selfie camera looks
+   along +z; its image x runs along device -x and image y along device -y. */
+function eyeFromLandmarks(lm, vw, vh) {
+  var fpx = (Math.max(vw, vh) / 2) / Math.tan(FRONT_FOV * D2R / 2);
+  var d1 = Math.hypot((lm[469].x - lm[471].x) * vw, (lm[469].y - lm[471].y) * vh);
+  var d2 = Math.hypot((lm[474].x - lm[476].x) * vw, (lm[474].y - lm[476].y) * vh);
+  var dpx = (d1 + d2) / 2;
+  if (!(dpx > 2)) return null;
+  var ez = fpx * (IRIS_MM / 1000) / dpx;
+  var u = (lm[468].x + lm[473].x) / 2, v = (lm[468].y + lm[473].y) / 2;
+  var ex = -(u - 0.5) * vw / fpx * ez;
+  var ey = -(v - 0.5) * vh / fpx * ez + screenMm().h / 2000;   // camera sits at the top edge
+  return { ex: ex, ey: ey, ez: ez };
+}
+function runFace(continuous) {
+  var fv = $('faceVid');
+  return loadFaceLandmarker().then(function (lm) {
+    return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } }, audio: false });
+  }).then(function (st) {
+    S.face.stream = st; fv.srcObject = st; fv.play().catch(function () {});
+    S.face.run = true; S.face.samples = [];
+    return new Promise(function (resolve) {
+      var lastT = -1;
+      (function tick() {
+        if (!S.face.run) { resolve(S.face.samples); return; }
+        if (fv.videoWidth && fv.currentTime !== lastT) {
+          lastT = fv.currentTime;
+          var r = S.face.lm.detectForVideo(fv, performance.now());
+          var f = r && r.faceLandmarks && r.faceLandmarks[0];
+          var e = f && f.length > 477 ? eyeFromLandmarks(f, fv.videoWidth, fv.videoHeight) : null;
+          if (e) {
+            if (continuous) {
+              var a = 0.25;
+              S.eye.ex += a * (e.ex - S.eye.ex); S.eye.ey += a * (e.ey - S.eye.ey); S.eye.ez += a * (e.ez - S.eye.ez);
+              S.eye.src = 'tracked';
+            } else {
+              S.face.samples.push(e);
+              if (S.face.samples.length >= 25) { stopFace(); resolve(S.face.samples); return; }
+            }
+          }
+        }
+        requestAnimationFrame(tick);
+      })();
+    });
+  });
+}
+function measureEyeOnce() {
+  note('measuring eye distance: look at the screen…');
+  return runFace(false).then(function (samples) {
+    if (!samples.length) { note('no face found; using ' + Math.round(S.eye.ez * 100) + ' cm'); return; }
+    var ez = samples.map(function (e) { return e.ez; }).sort(function (a, b) { return a - b; });
+    S.eye.ez = clamp(ez[ez.length >> 1], 0.10, 1.50); S.eye.ex = 0; S.eye.ey = 0; S.eye.src = 'measured';
+    note('eye distance ' + Math.round(S.eye.ez * 100) + ' cm; keep it there');
+  }).catch(function (err) { stopFace(); note('face tracking unavailable; using ' + Math.round(S.eye.ez * 100) + ' cm'); });
+}
+
 /* ----------------------------------------------------------------- start --- */
+function applySaved() {
+  var v = load('view'); if (v === 'ar' || v === 'window') S.view = v;
+  var sc = load('scr'); if (sc && sc.pxPerMm) { S.scr = sc; $('scrSrc').value = sc.src === 'diag' ? 'diag' : 'card'; }
+  var cm = load('eyeCm'); if (cm) { S.eye.ez = cm / 100; $('eyeCm').value = cm; }
+  var bg = load('bg'); if (bg === 'black') $('bgSrc').value = 'black';
+  var lens = load('lens'); if (lens && lens.vfov) S.lens = lens;
+  if (S.lens.src === 'estimated' && /Android/i.test(navigator.userAgent || '')) S.lens.vfov = 75;
+  setView(S.view); syncScreenStatus(); syncEyeUi();
+}
+applySaved();
+
 $('startBtn').addEventListener('click', function () {
   $('startOverlay').classList.add('hidden');
   S.started = true;
@@ -892,8 +1247,24 @@ $('startBtn').addEventListener('click', function () {
   } else {
     attach();
   }
-  startCamera();
   requestGeo();
+
+  stopFace();
+  var wantFace = S.view === 'window' && $('eyeSrc').value === 'face';
+  var canFace = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (S.view === 'ar') {
+    video.style.opacity = $('opacity').value / 100;
+    startCamera();
+  } else if (S.bg === 'camera') {
+    video.style.opacity = $('opacity').value / 100;
+    if (wantFace && canFace) measureEyeOnce().then(function () { syncViewUi(); startCamera(); });
+    else startCamera();
+  } else {
+    if (S.stream) { S.stream.getTracks().forEach(function (t) { t.stop(); }); S.stream = null; }
+    video.style.opacity = 0;
+    if (wantFace && canFace) runFace(true).catch(function () { note('face tracking unavailable; head fixed on the pane axis'); });
+  }
+  syncViewUi();
 });
 })();
 </script>
