@@ -166,7 +166,18 @@
             border-color: #ffaa44;
             color: #ffaa44;
         }
-    </style>
+            #drag-hint {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.35);
+            font-size: 12px;
+            letter-spacing: 0.4px;
+            pointer-events: none;
+            transition: opacity 2.5s;
+        }
+</style>
 </head>
 <body>
     <div id="canvas-container"></div>
@@ -177,6 +188,7 @@
     
     
     <div id="crosshair"></div>
+    <div id="drag-hint">drag to look &middot; space to fly</div>
     <button id="home-btn" class="nav-btn">⌂ NYC Surface</button>
     <button id="center-btn" class="nav-btn">◎ Globe Center</button>
     <div id="controls-dropdown">
@@ -455,6 +467,11 @@
             // Keyboard controls
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
+
+            const dragHint = document.getElementById('drag-hint');
+            renderer.domElement.addEventListener('mousedown',
+                () => { dragHint.style.opacity = '0'; }, { once: true });
+            setTimeout(() => { dragHint.style.opacity = '0'; }, 14000);
             
             // Click to move toward crosshairs
             renderer.domElement.addEventListener('click', onCanvasClick);
